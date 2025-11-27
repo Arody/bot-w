@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Botón hamburguesa -->
+        <button id="hamburger-btn" class="hamburger-btn" aria-label="Abrir menú">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        
+        <!-- Overlay para cerrar sidebar -->
+        <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+        
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Sesiones</h2>
+                <button id="close-sidebar-btn" class="btn-icon close-sidebar-btn" aria-label="Cerrar menú">×</button>
+            </div>
+            <div class="sidebar-content">
+                <div class="input-group">
+                    <input type="text" id="new-session-input" placeholder="Nueva sesión">
+                    <button id="add-session-btn" class="btn-primary">+</button>
+                </div>
+                <div class="sidebar-actions">
+                    <button id="open-settings-btn" class="btn-secondary">Claves API</button>
+                </div>
+                <ul id="session-list">
+                    <!-- Sessions will be injected here -->
+                </ul>
+            </div>
+        </div>
+        <div class="main-content">
+            <div id="welcome-screen">
+                <h1>Selecciona una sesión o crea una nueva</h1>
+            </div>
+            <div id="session-details" class="hidden">
+                <div class="session-header">
+                    <div class="session-header-info">
+                        <h2 id="session-title">Session ID</h2>
+                        <div id="status-container">
+                            <span class="status-dot" id="status-dot"></span>
+                            <span id="connection-status">Desconectado</span>
+                        </div>
+                    </div>
+                    <div class="session-header-actions">
+                        <button id="toggle-config-btn" class="btn-icon-text" title="Configuración del bot">
+                            <span class="icon">⚙️</span>
+                            <span>Configuración</span>
+                        </button>
+                        <button id="delete-session-btn" class="btn-danger-small">Eliminar</button>
+                    </div>
+                </div>
+                
+                <div id="qr-container" class="hidden">
+                    <img id="qr-image" src="" alt="QR Code">
+                    <p id="qr-text">Escanea este código QR con WhatsApp</p>
+                </div>
+                
+                <!-- Panel de configuración plegable -->
+                <div id="config-panel" class="config-panel collapsed">
+                    <div class="config-panel-content">
+                        <div class="config-section">
+                            <div class="config-row">
+                                <div class="bot-toggle-row">
+                                    <label class="switch">
+                                        <input type="checkbox" id="bot-toggle">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span id="bot-status-text">Bot deshabilitado</span>
+                                    <span id="bot-provider-pill" class="provider-pill">Gemini</span>
+                                </div>
+                            </div>
+                            <div class="config-grid">
+                                <div class="config-field">
+                                    <label for="model-provider-select">Proveedor</label>
+                                    <select id="model-provider-select">
+                                        <option value="gemini">Gemini</option>
+                                        <option value="openai">OpenAI</option>
+                                    </select>
+                                </div>
+                                <div class="config-field">
+                                    <label for="model-name-input">Modelo</label>
+                                    <input type="text" id="model-name-input" placeholder="gemini-2.0-flash">
+                                </div>
+                            </div>
+                            <div class="config-field">
+                                <label for="system-prompt-input">Mensaje del sistema</label>
+                                <textarea id="system-prompt-input" rows="3" placeholder="Indica cómo debe responder el bot"></textarea>
+                            </div>
+                            <div class="config-actions">
+                                <button id="save-settings-btn" class="btn-primary">Guardar configuración</button>
+                                <span id="save-feedback" class="save-feedback hidden">Cambios guardados</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vista de usuario conectado -->
+                <div id="user-info" class="hidden">
+                    <div class="user-info-header">
+                        <p class="connected-as">Conectado como: <span id="user-name"></span></p>
+                        <div class="section-actions">
+                            <input type="text" id="conversation-search" placeholder="Buscar..." class="search-input">
+                            <button id="refresh-conversations-btn" class="btn-icon" aria-label="Actualizar">&#8635;</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tablero Kanban - Embudo de Ventas -->
+                    <div class="kanban-board" id="kanban-board">
+                        <div class="kanban-column" data-stage="interest">
+                            <div class="kanban-column-header">
+                                <h4 class="kanban-title" data-stage="interest">Interés</h4>
+                                <span class="kanban-count" id="count-interest">0</span>
+                            </div>
+                            <div class="kanban-cards" id="cards-interest" data-stage="interest">
+                                <!-- Cards de interés -->
+                            </div>
+                        </div>
+                        <div class="kanban-column" data-stage="quote">
+                            <div class="kanban-column-header">
+                                <h4 class="kanban-title" data-stage="quote">Cotización</h4>
+                                <span class="kanban-count" id="count-quote">0</span>
+                            </div>
+                            <div class="kanban-cards" id="cards-quote" data-stage="quote">
+                                <!-- Cards de cotización -->
+                            </div>
+                        </div>
+                        <div class="kanban-column" data-stage="negotiation">
+                            <div class="kanban-column-header">
+                                <h4 class="kanban-title" data-stage="negotiation">Negociación</h4>
+                                <span class="kanban-count" id="count-negotiation">0</span>
+                            </div>
+                            <div class="kanban-cards" id="cards-negotiation" data-stage="negotiation">
+                                <!-- Cards de negociación -->
+                            </div>
+                        </div>
+                        <div class="kanban-column" data-stage="closed">
+                            <div class="kanban-column-header">
+                                <h4 class="kanban-title" data-stage="closed">Cerrado</h4>
+                                <span class="kanban-count" id="count-closed">0</span>
+                            </div>
+                            <div class="kanban-cards" id="cards-closed" data-stage="closed">
+                                <!-- Cards cerrados -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Vista de chat activo -->
+                    <div id="active-chat" class="active-chat hidden">
+                        <div class="chat-header">
+                            <button id="close-chat-btn" class="btn-icon" aria-label="Cerrar chat">←</button>
+                            <div class="chat-contact-info">
+                                <span id="chat-contact-name">Contacto</span>
+                                <span id="chat-contact-status" class="chat-status"></span>
+                            </div>
+                            <button id="export-chat-btn" class="btn-icon" aria-label="Exportar">⬇</button>
+                        </div>
+                        <div id="chat-messages" class="chat-messages">
+                            <!-- Mensajes se inyectarán aquí -->
+                        </div>
+                        <div id="chat-input-container" class="chat-input-container hidden">
+                            <input type="text" id="chat-input" placeholder="Escribe un mensaje..." class="chat-input">
+                            <button id="send-message-btn" class="btn-send">Enviar</button>
+                        </div>
+                        <div id="bot-active-notice" class="bot-active-notice hidden">
+                            <span>🤖 El bot está respondiendo automáticamente</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de configuración de claves -->
+    <div id="settings-overlay" class="modal-overlay hidden"></div>
+    <div id="settings-modal" class="settings-modal hidden">
+        <div class="settings-modal-content">
+            <div class="modal-header">
+                <h3>Claves API</h3>
+                <button id="close-settings-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Las claves se guardan en tu navegador y puedes exportarlas como JSON.</p>
+            <div class="api-entry">
+                <div class="api-entry-header">
+                    <h4>OpenAI</h4>
+                </div>
+                <input type="password" id="openai-key-input" placeholder="sk-...">
+                <div class="button-row">
+                    <button id="save-openai-key" class="btn-primary">Guardar</button>
+                    <button id="delete-openai-key" class="btn-link">Eliminar</button>
+                </div>
+            </div>
+            <div class="api-entry">
+                <div class="api-entry-header">
+                    <h4>Gemini</h4>
+                </div>
+                <input type="password" id="gemini-key-input" placeholder="AIza...">
+                <div class="button-row">
+                    <button id="save-gemini-key" class="btn-primary">Guardar</button>
+                    <button id="delete-gemini-key" class="btn-link">Eliminar</button>
+                </div>
+            </div>
+            <button id="export-keys-btn" class="btn-outline full-width">Descargar JSON</button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+</body>
+</html>
