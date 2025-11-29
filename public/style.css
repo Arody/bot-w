@@ -1283,6 +1283,371 @@ input:checked + .slider:before {
     justify-content: center;
 }
 
+/* Chat Input Attachments */
+.chat-input-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+}
+
+.chat-attachments {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-attach {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-attach:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: scale(1.1);
+}
+
+/* Buttons Modal */
+.buttons-modal,
+.send-button-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.buttons-modal-content {
+    background: var(--card-bg);
+    padding: 24px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.send-button-modal-content {
+    background: var(--card-bg);
+    padding: 24px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 450px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.buttons-list {
+    margin: 16px 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.button-config-card {
+    background: var(--surface-bg);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.button-config-card:hover {
+    border-color: var(--primary-color);
+}
+
+.button-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.button-config-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.button-config-preview {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.button-config-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.preview-button-tag {
+    background: rgba(0, 168, 132, 0.15);
+    border: 1px solid rgba(0, 168, 132, 0.3);
+    color: var(--primary-color);
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.button-config-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.new-button-form {
+    background: var(--surface-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 16px;
+}
+
+.new-button-form h4 {
+    margin: 0 0 16px 0;
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+
+.form-field {
+    margin-bottom: 14px;
+}
+
+.form-field label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.form-field input,
+.form-field textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: white;
+    font-size: 0.9rem;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.form-field textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.buttons-editor {
+    margin-bottom: 16px;
+}
+
+.buttons-editor > label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+#buttons-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.button-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.button-input-row input {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: white;
+    font-size: 0.85rem;
+}
+
+.button-input-row input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.btn-remove-row {
+    width: 32px;
+    height: 32px;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    color: var(--danger-color);
+}
+
+.btn-remove-row:hover {
+    background: rgba(255, 95, 87, 0.1);
+}
+
+.empty-buttons {
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Available Buttons for sending */
+.available-buttons-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.available-button-item {
+    background: var(--surface-bg);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.available-button-item:hover {
+    border-color: var(--primary-color);
+    background: rgba(0, 168, 132, 0.05);
+}
+
+.available-button-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.available-button-preview {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.available-button-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Image/Doc Preview Modal */
+.image-preview-modal,
+.doc-preview-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.image-preview-content,
+.doc-preview-content {
+    background: var(--card-bg);
+    padding: 24px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+.image-preview-container {
+    background: var(--surface-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-height: 300px;
+    overflow: hidden;
+}
+
+.image-preview-container img {
+    max-width: 100%;
+    max-height: 260px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.doc-preview-info {
+    background: var(--surface-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.doc-icon {
+    font-size: 3rem;
+}
+
+.doc-details {
+    flex: 1;
+}
+
+.doc-name {
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    word-break: break-all;
+}
+
+.doc-size {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* Sending indicator */
+.sending-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 15, 15, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 16px;
+    z-index: 10;
+}
+
+.sending-overlay .spinner {
+    width: 40px;
+    height: 40px;
+}
+
+/* Kanban responsive fixes */
+@media (max-width: 1200px) {
+    .kanban-board {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .kanban-board {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sidebar {

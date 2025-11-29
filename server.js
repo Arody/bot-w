@@ -8,8 +8,30 @@ const fs = require('fs-extra');
 const path = require('path');
 const QRCode = require('qrcode');
 const OpenAI = require('openai');
+const multer = require('multer');
+const mime = require('mime-types');
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Configurar multer para subida de archivos
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+fs.ensureDirSync(UPLOADS_DIR);
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+    }
+});
+
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 16 * 1024 * 1024 } // 16MB máximo
+});
 
 const DEFAULT_MODELS = {
     gemini: 'gemini-2.0-flash',
@@ -63,6 +85,7 @@ class MessageQueue {
 const MAX_MESSAGES_PER_CONVERSATION = parseInt(process.env.MAX_MESSAGES_PER_CONVERSATION) || 200;
 const CONVERSATIONS_FILE = 'conversations.json';
 const SESSION_CONFIG_FILE = 'config.json';
+const BUTTONS_FILE = 'buttons.json';
 const AI_COOLDOWN_MS = parseInt(process.env.AI_COOLDOWN_MS) || 1000; // 1 segundo entre respuestas AI
 
 function normalizeProvider(provider) {
@@ -90,6 +113,68 @@ function getConversationFilePath(sessionId) {
 
 function getSessionConfigFilePath(sessionId) {
     return path.join(SESSIONS_DIR, sessionId, SESSION_CONFIG_FILE);
+}
+
+function getButtonsFilePath(sessionId) {
+    return path.join(SESSIONS_DIR, sessionId, BUTTONS_FILE);
+}
+
+async function loadSessionButtons(sessionId) {
+    try {
+        const buttonsPath = getButtonsFilePath(sessionId);
+        if (await fs.pathExists(buttonsPath)) {
+            return await fs.readJson(buttonsPath);
+        }
+    } catch (error) {
+        console.error(`Error loading buttons for ${sessionId}:`, error);
+    }
+    return [];
+}
+
+async function saveSessionButtons(sessionId, buttons) {
+    try {
+        const buttonsPath = getButtonsFilePath(sessionId);
+        await fs.ensureDir(path.dirname(buttonsPath));
+        await fs.writeJson(buttonsPath, buttons, { spaces: 2 });
+    } catch (error) {
+        console.error(`Error saving buttons for ${sessionId}:`, error);
+    }
+}
+
+// Función para crear mensaje con botones interactivos
+function createButtonMessage(config) {
+    const { title, body, footer, buttons } = config;
+    
+    const nativeButtons = buttons.map(btn => ({
+        name: btn.type || 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+            display_text: btn.text,
+            id: btn.id
+        })
+    }));
+    
+    return {
+        viewOnceMessage: {
+            message: {
+                messageContextInfo: {
+                    deviceListMetadata: {},
+                    deviceListMetadataVersion: 2
+                },
+                interactiveMessage: {
+                    body: { text: body || '' },
+                    footer: { text: footer || '' },
+                    header: {
+                        title: title || '',
+                        subtitle: '',
+                        hasMediaAttachment: false
+                    },
+                    nativeFlowMessage: {
+                        buttons: nativeButtons
+                    }
+                }
+            }
+        }
+    };
 }
 
 async function loadSessionConfig(sessionId) {
@@ -242,6 +327,38 @@ const SESSIONS_DIR = process.env.SESSIONS_DIR || path.join(__dirname, 'sessions'
 
 // Serve static files
 app.use(express.static('public'));
+app.use(express.json());
+
+// Endpoint para subir archivos
+app.post('/upload', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const filePath = req.file.path;
+    const mimeType = mime.lookup(req.file.originalname) || 'application/octet-stream';
+    const isImage = mimeType.startsWith('image/');
+    
+    res.json({
+        success: true,
+        filePath,
+        originalName: req.file.originalname,
+        mimeType,
+        size: req.file.size,
+        isImage
+    });
+});
+
+// Limpiar archivo después de enviarlo
+async function cleanupFile(filePath) {
+    try {
+        if (filePath && await fs.pathExists(filePath)) {
+            await fs.remove(filePath);
+        }
+    } catch (error) {
+        console.error('Error cleaning up file:', error);
+    }
+}
 
 // Active sessions in memory
 // Map<id, { sock: WASocket, botEnabled: boolean, apiKey: string, conversations: Map }>
@@ -702,6 +819,184 @@ io.on('connection', async (socket) => {
         
         // Emitir actualización a todos los clientes
         emitConversationUpdate(sessionId, conversation);
+    }));
+
+    // Enviar imagen
+    socket.on('send_image', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, filePath, caption } = data;
+        
+        if (!sessionId || !chatId || !filePath) {
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.sock) {
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: 'Sesión no encontrada' });
+            return;
+        }
+        
+        try {
+            const imageBuffer = await fs.readFile(filePath);
+            const mimeType = mime.lookup(filePath) || 'image/jpeg';
+            
+            await sessionData.sock.sendMessage(chatId, {
+                image: imageBuffer,
+                caption: caption || '',
+                mimetype: mimeType
+            });
+            
+            // Registrar mensaje en la conversación
+            const conversation = ensureConversationRecord(sessionId, chatId, chatId);
+            appendMessage(conversation, {
+                id: `img-${Date.now()}`,
+                direction: 'outgoing',
+                text: caption ? `📷 Imagen: ${caption}` : '📷 Imagen enviada',
+                timestamp: Date.now()
+            });
+            
+            await persistConversations(sessionId);
+            emitConversationUpdate(sessionId, conversation);
+            
+            // Limpiar archivo
+            await cleanupFile(filePath);
+            
+            socket.emit('media_sent', { sessionId, chatId, success: true, type: 'image' });
+        } catch (error) {
+            console.error('Error sending image:', error);
+            await cleanupFile(filePath);
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: error.message });
+        }
+    }));
+
+    // Enviar documento
+    socket.on('send_document', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, filePath, fileName, caption } = data;
+        
+        if (!sessionId || !chatId || !filePath) {
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.sock) {
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: 'Sesión no encontrada' });
+            return;
+        }
+        
+        try {
+            const docBuffer = await fs.readFile(filePath);
+            const mimeType = mime.lookup(filePath) || 'application/octet-stream';
+            
+            await sessionData.sock.sendMessage(chatId, {
+                document: docBuffer,
+                mimetype: mimeType,
+                fileName: fileName || path.basename(filePath),
+                caption: caption || ''
+            });
+            
+            // Registrar mensaje en la conversación
+            const conversation = ensureConversationRecord(sessionId, chatId, chatId);
+            appendMessage(conversation, {
+                id: `doc-${Date.now()}`,
+                direction: 'outgoing',
+                text: `📄 Documento: ${fileName || path.basename(filePath)}`,
+                timestamp: Date.now()
+            });
+            
+            await persistConversations(sessionId);
+            emitConversationUpdate(sessionId, conversation);
+            
+            // Limpiar archivo
+            await cleanupFile(filePath);
+            
+            socket.emit('media_sent', { sessionId, chatId, success: true, type: 'document' });
+        } catch (error) {
+            console.error('Error sending document:', error);
+            await cleanupFile(filePath);
+            socket.emit('media_sent', { sessionId, chatId, success: false, error: error.message });
+        }
+    }));
+
+    // Enviar mensaje con botones
+    socket.on('send_button_message', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, buttonConfig } = data;
+        
+        if (!sessionId || !chatId || !buttonConfig) {
+            socket.emit('button_message_sent', { sessionId, chatId, success: false, error: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.sock) {
+            socket.emit('button_message_sent', { sessionId, chatId, success: false, error: 'Sesión no encontrada' });
+            return;
+        }
+        
+        try {
+            const msg = createButtonMessage(buttonConfig);
+            await sessionData.sock.sendMessage(chatId, msg);
+            
+            // Registrar mensaje en la conversación
+            const conversation = ensureConversationRecord(sessionId, chatId, chatId);
+            const buttonTexts = buttonConfig.buttons.map(b => b.text).join(', ');
+            appendMessage(conversation, {
+                id: `btn-${Date.now()}`,
+                direction: 'outgoing',
+                text: `🔘 Mensaje con botones: ${buttonConfig.title || buttonConfig.body}\n[${buttonTexts}]`,
+                timestamp: Date.now()
+            });
+            
+            await persistConversations(sessionId);
+            emitConversationUpdate(sessionId, conversation);
+            
+            socket.emit('button_message_sent', { sessionId, chatId, success: true });
+        } catch (error) {
+            console.error('Error sending button message:', error);
+            socket.emit('button_message_sent', { sessionId, chatId, success: false, error: error.message });
+        }
+    }));
+
+    // Obtener botones configurados para una sesión
+    socket.on('get_session_buttons', asyncSocketHandler(async (data) => {
+        const { sessionId } = data;
+        
+        if (!sessionId) {
+            socket.emit('session_buttons', { sessionId, buttons: [] });
+            return;
+        }
+        
+        const buttons = await loadSessionButtons(sessionId);
+        socket.emit('session_buttons', { sessionId, buttons });
+    }));
+
+    // Guardar/actualizar botones para una sesión
+    socket.on('save_session_buttons', asyncSocketHandler(async (data) => {
+        const { sessionId, buttons } = data;
+        
+        if (!sessionId) {
+            socket.emit('error', { message: 'ID de sesión requerido' });
+            return;
+        }
+        
+        await saveSessionButtons(sessionId, buttons || []);
+        io.emit('session_buttons_updated', { sessionId, buttons: buttons || [] });
+    }));
+
+    // Eliminar un botón específico
+    socket.on('delete_session_button', asyncSocketHandler(async (data) => {
+        const { sessionId, buttonId } = data;
+        
+        if (!sessionId || !buttonId) {
+            socket.emit('error', { message: 'Datos incompletos' });
+            return;
+        }
+        
+        const buttons = await loadSessionButtons(sessionId);
+        const updatedButtons = buttons.filter(b => b.id !== buttonId);
+        await saveSessionButtons(sessionId, updatedButtons);
+        
+        io.emit('session_buttons_updated', { sessionId, buttons: updatedButtons });
     }));
 
     socket.on('update_session_config', asyncSocketHandler(async (data) => {

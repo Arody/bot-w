@@ -51,6 +51,10 @@
                         </div>
                     </div>
                     <div class="session-header-actions">
+                        <button id="manage-buttons-btn" class="btn-icon-text" title="Configurar botones interactivos">
+                            <span class="icon">🔘</span>
+                            <span>Botones</span>
+                        </button>
                         <button id="toggle-config-btn" class="btn-icon-text" title="Configuración del bot">
                             <span class="icon">⚙️</span>
                             <span>Configuración</span>
@@ -167,8 +171,17 @@
                             <!-- Mensajes se inyectarán aquí -->
                         </div>
                         <div id="chat-input-container" class="chat-input-container hidden">
-                            <input type="text" id="chat-input" placeholder="Escribe un mensaje..." class="chat-input">
-                            <button id="send-message-btn" class="btn-send">Enviar</button>
+                            <div class="chat-input-row">
+                                <div class="chat-attachments">
+                                    <button id="attach-image-btn" class="btn-attach" title="Enviar imagen">📷</button>
+                                    <button id="attach-doc-btn" class="btn-attach" title="Enviar documento">📄</button>
+                                    <button id="send-buttons-btn" class="btn-attach" title="Enviar botones">🔘</button>
+                                </div>
+                                <input type="text" id="chat-input" placeholder="Escribe un mensaje..." class="chat-input">
+                                <button id="send-message-btn" class="btn-send">Enviar</button>
+                            </div>
+                            <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                            <input type="file" id="doc-upload" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" style="display: none;">
                         </div>
                         <div id="bot-active-notice" class="bot-active-notice hidden">
                             <span>🤖 El bot está respondiendo automáticamente</span>
@@ -213,6 +226,117 @@
     </div>
     
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    
+    <!-- Modal para gestionar botones -->
+    <div id="buttons-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="buttons-modal" class="buttons-modal hidden">
+        <div class="buttons-modal-content">
+            <div class="modal-header">
+                <h3>Botones Interactivos</h3>
+                <button id="close-buttons-modal-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Configura mensajes con botones que estarán disponibles para todos los chats de esta sesión.</p>
+            
+            <!-- Lista de botones existentes -->
+            <div class="buttons-list" id="buttons-list">
+                <p class="empty-buttons">No hay botones configurados</p>
+            </div>
+            
+            <!-- Formulario para crear nuevo botón -->
+            <div class="new-button-form">
+                <h4>Crear nuevo mensaje con botones</h4>
+                <div class="form-field">
+                    <label for="btn-name-input">Nombre (para identificar)</label>
+                    <input type="text" id="btn-name-input" placeholder="Ej: Menú principal">
+                </div>
+                <div class="form-field">
+                    <label for="btn-title-input">Título del mensaje</label>
+                    <input type="text" id="btn-title-input" placeholder="Ej: Menú Principal">
+                </div>
+                <div class="form-field">
+                    <label for="btn-body-input">Cuerpo del mensaje</label>
+                    <textarea id="btn-body-input" rows="2" placeholder="Ej: Hola, selecciona una opción 👇"></textarea>
+                </div>
+                <div class="form-field">
+                    <label for="btn-footer-input">Pie de mensaje (opcional)</label>
+                    <input type="text" id="btn-footer-input" placeholder="Ej: Powered by Bot">
+                </div>
+                
+                <div class="buttons-editor">
+                    <label>Botones (máximo 3)</label>
+                    <div id="buttons-inputs">
+                        <div class="button-input-row">
+                            <input type="text" class="btn-text-input" placeholder="Texto del botón">
+                            <input type="text" class="btn-id-input" placeholder="ID único">
+                            <button class="btn-remove-row btn-icon" title="Eliminar">×</button>
+                        </div>
+                    </div>
+                    <button id="add-button-row-btn" class="btn-link">+ Añadir botón</button>
+                </div>
+                
+                <button id="save-new-button-btn" class="btn-primary full-width">Guardar mensaje con botones</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para seleccionar botón a enviar -->
+    <div id="send-button-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="send-button-modal" class="send-button-modal hidden">
+        <div class="send-button-modal-content">
+            <div class="modal-header">
+                <h3>Enviar botones</h3>
+                <button id="close-send-button-modal-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Selecciona un mensaje con botones para enviar al chat actual.</p>
+            
+            <div class="available-buttons-list" id="available-buttons-list">
+                <p class="empty-buttons">No hay botones configurados. Configúralos primero.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para preview de imagen -->
+    <div id="image-preview-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="image-preview-modal" class="image-preview-modal hidden">
+        <div class="image-preview-content">
+            <div class="modal-header">
+                <h3>Enviar imagen</h3>
+                <button id="close-image-preview-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="image-preview-container">
+                <img id="preview-image" src="" alt="Preview">
+            </div>
+            <div class="form-field">
+                <label for="image-caption-input">Descripción (opcional)</label>
+                <input type="text" id="image-caption-input" placeholder="Añadir descripción...">
+            </div>
+            <button id="confirm-send-image-btn" class="btn-primary full-width">Enviar imagen</button>
+        </div>
+    </div>
+    
+    <!-- Modal para preview de documento -->
+    <div id="doc-preview-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="doc-preview-modal" class="doc-preview-modal hidden">
+        <div class="doc-preview-content">
+            <div class="modal-header">
+                <h3>Enviar documento</h3>
+                <button id="close-doc-preview-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="doc-preview-info">
+                <span class="doc-icon">📄</span>
+                <div class="doc-details">
+                    <p id="doc-name" class="doc-name">documento.pdf</p>
+                    <p id="doc-size" class="doc-size">0 KB</p>
+                </div>
+            </div>
+            <div class="form-field">
+                <label for="doc-caption-input">Descripción (opcional)</label>
+                <input type="text" id="doc-caption-input" placeholder="Añadir descripción...">
+            </div>
+            <button id="confirm-send-doc-btn" class="btn-primary full-width">Enviar documento</button>
+        </div>
+    </div>
+    
     <script src="app.js"></script>
 </body>
 </html>

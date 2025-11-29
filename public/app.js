@@ -98,6 +98,54 @@ const saveGeminiKeyBtn = document.getElementById('save-gemini-key');
 const deleteGeminiKeyBtn = document.getElementById('delete-gemini-key');
 const exportKeysBtn = document.getElementById('export-keys-btn');
 
+// Attachment Elements
+const attachImageBtn = document.getElementById('attach-image-btn');
+const attachDocBtn = document.getElementById('attach-doc-btn');
+const sendButtonsBtn = document.getElementById('send-buttons-btn');
+const imageUpload = document.getElementById('image-upload');
+const docUpload = document.getElementById('doc-upload');
+
+// Buttons Modal Elements
+const manageButtonsBtn = document.getElementById('manage-buttons-btn');
+const buttonsModal = document.getElementById('buttons-modal');
+const buttonsModalOverlay = document.getElementById('buttons-modal-overlay');
+const closeButtonsModalBtn = document.getElementById('close-buttons-modal-btn');
+const buttonsList = document.getElementById('buttons-list');
+const btnNameInput = document.getElementById('btn-name-input');
+const btnTitleInput = document.getElementById('btn-title-input');
+const btnBodyInput = document.getElementById('btn-body-input');
+const btnFooterInput = document.getElementById('btn-footer-input');
+const buttonsInputs = document.getElementById('buttons-inputs');
+const addButtonRowBtn = document.getElementById('add-button-row-btn');
+const saveNewButtonBtn = document.getElementById('save-new-button-btn');
+
+// Send Button Modal Elements
+const sendButtonModal = document.getElementById('send-button-modal');
+const sendButtonModalOverlay = document.getElementById('send-button-modal-overlay');
+const closeSendButtonModalBtn = document.getElementById('close-send-button-modal-btn');
+const availableButtonsList = document.getElementById('available-buttons-list');
+
+// Image Preview Modal Elements
+const imagePreviewModal = document.getElementById('image-preview-modal');
+const imagePreviewModalOverlay = document.getElementById('image-preview-modal-overlay');
+const closeImagePreviewBtn = document.getElementById('close-image-preview-btn');
+const previewImage = document.getElementById('preview-image');
+const imageCaptionInput = document.getElementById('image-caption-input');
+const confirmSendImageBtn = document.getElementById('confirm-send-image-btn');
+
+// Doc Preview Modal Elements
+const docPreviewModal = document.getElementById('doc-preview-modal');
+const docPreviewModalOverlay = document.getElementById('doc-preview-modal-overlay');
+const closeDocPreviewBtn = document.getElementById('close-doc-preview-btn');
+const docNameEl = document.getElementById('doc-name');
+const docSizeEl = document.getElementById('doc-size');
+const docCaptionInput = document.getElementById('doc-caption-input');
+const confirmSendDocBtn = document.getElementById('confirm-send-doc-btn');
+
+// Session buttons cache
+const sessionButtonsCache = new Map();
+let pendingFileUpload = null;
+
 modelProviderSelect.dataset.prevProvider = modelProviderSelect.value || 'gemini';
 
 // Helpers
@@ -1002,6 +1050,370 @@ function exportConversation(conversation) {
     showToast('Conversación exportada');
 }
 
+// ==================== FILE UPLOAD FUNCTIONS ====================
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error('Error al subir archivo');
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Upload error:', error);
+        showAlertDialog('Error al subir el archivo: ' + error.message);
+        return null;
+    }
+}
+
+function openImagePreview(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImage.src = e.target.result;
+        imageCaptionInput.value = '';
+        imagePreviewModal.classList.remove('hidden');
+        imagePreviewModalOverlay.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+    pendingFileUpload = file;
+}
+
+function closeImagePreview() {
+    imagePreviewModal.classList.add('hidden');
+    imagePreviewModalOverlay.classList.add('hidden');
+    pendingFileUpload = null;
+    previewImage.src = '';
+    imageCaptionInput.value = '';
+}
+
+function openDocPreview(file) {
+    docNameEl.textContent = file.name;
+    docSizeEl.textContent = formatFileSize(file.size);
+    docCaptionInput.value = '';
+    docPreviewModal.classList.remove('hidden');
+    docPreviewModalOverlay.classList.remove('hidden');
+    pendingFileUpload = file;
+}
+
+function closeDocPreview() {
+    docPreviewModal.classList.add('hidden');
+    docPreviewModalOverlay.classList.add('hidden');
+    pendingFileUpload = null;
+    docCaptionInput.value = '';
+}
+
+async function sendImage() {
+    if (!pendingFileUpload || !activeChat || !currentSessionId) return;
+    
+    confirmSendImageBtn.disabled = true;
+    confirmSendImageBtn.textContent = 'Enviando...';
+    
+    try {
+        const uploadResult = await uploadFile(pendingFileUpload);
+        if (!uploadResult || !uploadResult.success) {
+            throw new Error('Error al subir imagen');
+        }
+        
+        socket.emit('send_image', {
+            sessionId: currentSessionId,
+            chatId: activeChat.chatId,
+            filePath: uploadResult.filePath,
+            caption: imageCaptionInput.value.trim()
+        });
+        
+        closeImagePreview();
+        showToast('Imagen enviada');
+    } catch (error) {
+        showAlertDialog('Error al enviar imagen: ' + error.message);
+    } finally {
+        confirmSendImageBtn.disabled = false;
+        confirmSendImageBtn.textContent = 'Enviar imagen';
+    }
+}
+
+async function sendDocument() {
+    if (!pendingFileUpload || !activeChat || !currentSessionId) return;
+    
+    confirmSendDocBtn.disabled = true;
+    confirmSendDocBtn.textContent = 'Enviando...';
+    
+    try {
+        const uploadResult = await uploadFile(pendingFileUpload);
+        if (!uploadResult || !uploadResult.success) {
+            throw new Error('Error al subir documento');
+        }
+        
+        socket.emit('send_document', {
+            sessionId: currentSessionId,
+            chatId: activeChat.chatId,
+            filePath: uploadResult.filePath,
+            fileName: pendingFileUpload.name,
+            caption: docCaptionInput.value.trim()
+        });
+        
+        closeDocPreview();
+        showToast('Documento enviado');
+    } catch (error) {
+        showAlertDialog('Error al enviar documento: ' + error.message);
+    } finally {
+        confirmSendDocBtn.disabled = false;
+        confirmSendDocBtn.textContent = 'Enviar documento';
+    }
+}
+
+// ==================== BUTTONS MANAGEMENT FUNCTIONS ====================
+
+function openButtonsModal() {
+    buttonsModal.classList.remove('hidden');
+    buttonsModalOverlay.classList.remove('hidden');
+    renderButtonsList();
+    resetButtonForm();
+}
+
+function closeButtonsModal() {
+    buttonsModal.classList.add('hidden');
+    buttonsModalOverlay.classList.add('hidden');
+}
+
+function openSendButtonModal() {
+    if (!currentSessionId) return;
+    
+    const buttons = sessionButtonsCache.get(currentSessionId) || [];
+    
+    if (buttons.length === 0) {
+        showAlertDialog('No hay botones configurados. Configúralos primero desde el botón "Botones" en la barra superior.');
+        return;
+    }
+    
+    renderAvailableButtons(buttons);
+    sendButtonModal.classList.remove('hidden');
+    sendButtonModalOverlay.classList.remove('hidden');
+}
+
+function closeSendButtonModal() {
+    sendButtonModal.classList.add('hidden');
+    sendButtonModalOverlay.classList.add('hidden');
+}
+
+function renderButtonsList() {
+    if (!currentSessionId) {
+        buttonsList.innerHTML = '<p class="empty-buttons">Selecciona una sesión primero</p>';
+        return;
+    }
+    
+    const buttons = sessionButtonsCache.get(currentSessionId) || [];
+    
+    if (buttons.length === 0) {
+        buttonsList.innerHTML = '<p class="empty-buttons">No hay botones configurados</p>';
+        return;
+    }
+    
+    buttonsList.innerHTML = buttons.map(btn => `
+        <div class="button-config-card" data-id="${btn.id}">
+            <div class="button-config-header">
+                <span class="button-config-name">${btn.name}</span>
+                <div class="button-config-actions">
+                    <button class="btn-icon btn-delete-config" data-id="${btn.id}" title="Eliminar">🗑️</button>
+                </div>
+            </div>
+            <div class="button-config-preview">${btn.body || btn.title}</div>
+            <div class="button-config-buttons">
+                ${btn.buttons.map(b => `<span class="preview-button-tag">${b.text}</span>`).join('')}
+            </div>
+        </div>
+    `).join('');
+    
+    // Añadir event listeners para eliminar
+    buttonsList.querySelectorAll('.btn-delete-config').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const btnId = btn.dataset.id;
+            showConfirmDialog('¿Eliminar este mensaje con botones?', () => {
+                socket.emit('delete_session_button', {
+                    sessionId: currentSessionId,
+                    buttonId: btnId
+                });
+            });
+        };
+    });
+}
+
+function renderAvailableButtons(buttons) {
+    if (buttons.length === 0) {
+        availableButtonsList.innerHTML = '<p class="empty-buttons">No hay botones configurados. Configúralos primero.</p>';
+        return;
+    }
+    
+    availableButtonsList.innerHTML = buttons.map(btn => `
+        <div class="available-button-item" data-id="${btn.id}">
+            <div class="available-button-name">${btn.name}</div>
+            <div class="available-button-preview">${btn.body || btn.title}</div>
+            <div class="available-button-tags">
+                ${btn.buttons.map(b => `<span class="preview-button-tag">${b.text}</span>`).join('')}
+            </div>
+        </div>
+    `).join('');
+    
+    // Añadir event listeners para enviar
+    availableButtonsList.querySelectorAll('.available-button-item').forEach(item => {
+        item.onclick = () => {
+            const btnId = item.dataset.id;
+            const buttonConfig = buttons.find(b => b.id === btnId);
+            if (buttonConfig) {
+                sendButtonMessage(buttonConfig);
+            }
+        };
+    });
+}
+
+function sendButtonMessage(buttonConfig) {
+    if (!activeChat || !currentSessionId) {
+        showAlertDialog('No hay chat activo');
+        return;
+    }
+    
+    socket.emit('send_button_message', {
+        sessionId: currentSessionId,
+        chatId: activeChat.chatId,
+        buttonConfig: {
+            title: buttonConfig.title,
+            body: buttonConfig.body,
+            footer: buttonConfig.footer,
+            buttons: buttonConfig.buttons
+        }
+    });
+    
+    closeSendButtonModal();
+    showToast('Enviando mensaje con botones...');
+}
+
+function resetButtonForm() {
+    btnNameInput.value = '';
+    btnTitleInput.value = '';
+    btnBodyInput.value = '';
+    btnFooterInput.value = '';
+    
+    buttonsInputs.innerHTML = `
+        <div class="button-input-row">
+            <input type="text" class="btn-text-input" placeholder="Texto del botón">
+            <input type="text" class="btn-id-input" placeholder="ID único">
+            <button class="btn-remove-row btn-icon" title="Eliminar">×</button>
+        </div>
+    `;
+    
+    setupButtonRowListeners();
+}
+
+function addButtonRow() {
+    const rows = buttonsInputs.querySelectorAll('.button-input-row');
+    if (rows.length >= 3) {
+        showAlertDialog('Máximo 3 botones por mensaje');
+        return;
+    }
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'button-input-row';
+    newRow.innerHTML = `
+        <input type="text" class="btn-text-input" placeholder="Texto del botón">
+        <input type="text" class="btn-id-input" placeholder="ID único">
+        <button class="btn-remove-row btn-icon" title="Eliminar">×</button>
+    `;
+    
+    buttonsInputs.appendChild(newRow);
+    setupButtonRowListeners();
+}
+
+function setupButtonRowListeners() {
+    buttonsInputs.querySelectorAll('.btn-remove-row').forEach(btn => {
+        btn.onclick = (e) => {
+            const rows = buttonsInputs.querySelectorAll('.button-input-row');
+            if (rows.length > 1) {
+                btn.parentElement.remove();
+            }
+        };
+    });
+}
+
+function saveNewButton() {
+    if (!currentSessionId) {
+        showAlertDialog('Selecciona una sesión primero');
+        return;
+    }
+    
+    const name = btnNameInput.value.trim();
+    const title = btnTitleInput.value.trim();
+    const body = btnBodyInput.value.trim();
+    const footer = btnFooterInput.value.trim();
+    
+    if (!name) {
+        showAlertDialog('El nombre es requerido');
+        return;
+    }
+    
+    if (!body && !title) {
+        showAlertDialog('El cuerpo o título del mensaje es requerido');
+        return;
+    }
+    
+    const buttonRows = buttonsInputs.querySelectorAll('.button-input-row');
+    const buttons = [];
+    
+    buttonRows.forEach(row => {
+        const text = row.querySelector('.btn-text-input').value.trim();
+        const id = row.querySelector('.btn-id-input').value.trim();
+        
+        if (text && id) {
+            buttons.push({ text, id, type: 'quick_reply' });
+        }
+    });
+    
+    if (buttons.length === 0) {
+        showAlertDialog('Añade al menos un botón con texto e ID');
+        return;
+    }
+    
+    const newButtonConfig = {
+        id: `btn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        title,
+        body,
+        footer,
+        buttons
+    };
+    
+    const existingButtons = sessionButtonsCache.get(currentSessionId) || [];
+    existingButtons.push(newButtonConfig);
+    
+    socket.emit('save_session_buttons', {
+        sessionId: currentSessionId,
+        buttons: existingButtons
+    });
+    
+    resetButtonForm();
+    showToast('Botón guardado');
+}
+
+function requestSessionButtons(sessionId) {
+    if (!sessionId) return;
+    socket.emit('get_session_buttons', { sessionId });
+}
+
 function selectSession(id) {
     currentSessionId = id;
     activeChat = null;
@@ -1025,6 +1437,7 @@ function selectSession(id) {
         updateSessionDetails(session);
     }
     requestConversations(id);
+    requestSessionButtons(id);
 }
 
 function handleAddSession() {
@@ -1269,6 +1682,42 @@ socket.on('message_sent', (payload) => {
     }
 });
 
+socket.on('media_sent', (payload) => {
+    const { sessionId, chatId, success, type, error } = payload || {};
+    if (!success) {
+        showAlertDialog(`Error al enviar ${type === 'image' ? 'imagen' : 'documento'}: ${error || 'Error desconocido'}`);
+    }
+});
+
+socket.on('button_message_sent', (payload) => {
+    const { sessionId, chatId, success, error } = payload || {};
+    if (success) {
+        showToast('Mensaje con botones enviado');
+    } else {
+        showAlertDialog(`Error al enviar botones: ${error || 'Error desconocido'}`);
+    }
+});
+
+socket.on('session_buttons', (payload) => {
+    const { sessionId, buttons } = payload || {};
+    if (sessionId) {
+        sessionButtonsCache.set(sessionId, buttons || []);
+        if (sessionId === currentSessionId) {
+            renderButtonsList();
+        }
+    }
+});
+
+socket.on('session_buttons_updated', (payload) => {
+    const { sessionId, buttons } = payload || {};
+    if (sessionId) {
+        sessionButtonsCache.set(sessionId, buttons || []);
+        if (sessionId === currentSessionId) {
+            renderButtonsList();
+        }
+    }
+});
+
 socket.on('error', (data) => {
     showAlertDialog(data.message || 'Ha ocurrido un error');
 });
@@ -1341,6 +1790,51 @@ saveGeminiKeyBtn.onclick = () => handleSaveKey('gemini');
 deleteOpenaiKeyBtn.onclick = () => handleDeleteKey('openai');
 deleteGeminiKeyBtn.onclick = () => handleDeleteKey('gemini');
 exportKeysBtn.onclick = exportKeys;
+
+// Attachment Event Listeners
+attachImageBtn.onclick = () => imageUpload.click();
+attachDocBtn.onclick = () => docUpload.click();
+sendButtonsBtn.onclick = openSendButtonModal;
+
+imageUpload.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        openImagePreview(file);
+        imageUpload.value = '';
+    }
+};
+
+docUpload.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        openDocPreview(file);
+        docUpload.value = '';
+    }
+};
+
+// Image Preview Modal
+closeImagePreviewBtn.onclick = closeImagePreview;
+imagePreviewModalOverlay.onclick = closeImagePreview;
+confirmSendImageBtn.onclick = sendImage;
+
+// Doc Preview Modal
+closeDocPreviewBtn.onclick = closeDocPreview;
+docPreviewModalOverlay.onclick = closeDocPreview;
+confirmSendDocBtn.onclick = sendDocument;
+
+// Buttons Modal
+manageButtonsBtn.onclick = openButtonsModal;
+closeButtonsModalBtn.onclick = closeButtonsModal;
+buttonsModalOverlay.onclick = closeButtonsModal;
+addButtonRowBtn.onclick = addButtonRow;
+saveNewButtonBtn.onclick = saveNewButton;
+
+// Send Button Modal
+closeSendButtonModalBtn.onclick = closeSendButtonModal;
+sendButtonModalOverlay.onclick = closeSendButtonModal;
+
+// Initialize button row listeners
+setupButtonRowListeners();
 
 // Sidebar Functions
 function openSidebar() {
