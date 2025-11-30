@@ -154,8 +154,19 @@ const chatCustomNameInput = document.getElementById('chat-custom-name-input');
 const chatDescriptionInput = document.getElementById('chat-description-input');
 const saveChatInfoBtn = document.getElementById('save-chat-info-btn');
 
+// Contacts Modal Elements
+const contactsBtn = document.getElementById('contacts-btn');
+const contactsModal = document.getElementById('contacts-modal');
+const contactsModalOverlay = document.getElementById('contacts-modal-overlay');
+const closeContactsModalBtn = document.getElementById('close-contacts-modal-btn');
+const contactsListContainer = document.getElementById('contacts-list-container');
+const contactsSearchInput = document.getElementById('contacts-search-input');
+
 // Current chat being edited
 let editingChatData = null;
+
+// Contacts cache
+let currentContacts = [];
 
 modelProviderSelect.dataset.prevProvider = modelProviderSelect.value || 'gemini';
 
@@ -1478,6 +1489,106 @@ function saveChatInfo() {
     showToast('Información actualizada');
 }
 
+// ==================== CONTACTS FUNCTIONS ====================
+
+function openContactsModal() {
+    if (!currentSessionId) {
+        showAlertDialog('Selecciona una sesión primero');
+        return;
+    }
+    
+    contactsModal.classList.remove('hidden');
+    contactsModalOverlay.classList.remove('hidden');
+    contactsSearchInput.value = '';
+    
+    // Mostrar loading
+    contactsListContainer.innerHTML = `
+        <div class="loading-contacts">
+            <span class="spinner"></span>
+            <span>Cargando contactos...</span>
+        </div>
+    `;
+    
+    // Solicitar contactos al servidor
+    socket.emit('get_contacts', { sessionId: currentSessionId });
+}
+
+function closeContactsModal() {
+    contactsModal.classList.add('hidden');
+    contactsModalOverlay.classList.add('hidden');
+    currentContacts = [];
+}
+
+function formatPhoneNumber(jid) {
+    if (!jid) return '';
+    // Extraer número del JID (ej: 5219611382035@s.whatsapp.net)
+    const number = jid.split('@')[0];
+    if (number.length >= 10) {
+        const last10 = number.slice(-10);
+        return `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
+    }
+    return number;
+}
+
+function renderContactsList(contacts) {
+    currentContacts = contacts || [];
+    
+    if (currentContacts.length === 0) {
+        contactsListContainer.innerHTML = '<p class="empty-contacts">No se encontraron contactos</p>';
+        return;
+    }
+    
+    contactsListContainer.innerHTML = currentContacts.map(contact => `
+        <div class="contact-item" data-jid="${contact.jid}">
+            <div class="contact-avatar">${getInitials(contact.name)}</div>
+            <div class="contact-info">
+                <div class="contact-name">${contact.name}</div>
+                <div class="contact-phone">${formatPhoneNumber(contact.jid)}</div>
+            </div>
+        </div>
+    `).join('');
+    
+    // Añadir event listeners
+    contactsListContainer.querySelectorAll('.contact-item').forEach(item => {
+        item.onclick = () => {
+            const jid = item.dataset.jid;
+            const contact = currentContacts.find(c => c.jid === jid);
+            if (contact) {
+                startConversationWithContact(contact);
+            }
+        };
+    });
+}
+
+function filterContacts(query) {
+    if (!query || !currentContacts.length) {
+        renderContactsList(currentContacts);
+        return;
+    }
+    
+    const searchTerm = query.toLowerCase();
+    const filtered = currentContacts.filter(contact => 
+        contact.name.toLowerCase().includes(searchTerm) ||
+        contact.jid.toLowerCase().includes(searchTerm)
+    );
+    
+    renderContactsList(filtered);
+}
+
+function startConversationWithContact(contact) {
+    if (!currentSessionId || !contact) return;
+    
+    showToast('Iniciando conversación...');
+    
+    socket.emit('start_conversation_with_contact', {
+        sessionId: currentSessionId,
+        contactJid: contact.jid,
+        contactName: contact.name
+    });
+    
+    closeContactsModal();
+}
+
 function selectSession(id) {
     currentSessionId = id;
     activeChat = null;
@@ -1782,6 +1893,31 @@ socket.on('session_buttons_updated', (payload) => {
     }
 });
 
+socket.on('contacts_list', (payload) => {
+    const { sessionId, contacts } = payload || {};
+    if (sessionId === currentSessionId) {
+        renderContactsList(contacts || []);
+    }
+});
+
+socket.on('conversation_started', (payload) => {
+    const { sessionId, chatId, conversation } = payload || {};
+    if (sessionId === currentSessionId && conversation) {
+        // Actualizar el caché con la nueva conversación
+        upsertConversation(sessionId, conversation);
+        
+        // Asegurar que el stage esté en 'interest'
+        if (conversation.chatId) {
+            setConversationStage(conversation.chatId, 'interest');
+        }
+        
+        // Re-renderizar el Kanban
+        renderKanbanBoard(sessionId);
+        
+        showToast('Conversación iniciada en etapa "Interés"');
+    }
+});
+
 socket.on('error', (data) => {
     showAlertDialog(data.message || 'Ha ocurrido un error');
 });
@@ -1901,6 +2037,14 @@ sendButtonModalOverlay.onclick = closeSendButtonModal;
 closeEditChatBtn.onclick = closeEditChatModal;
 editChatModalOverlay.onclick = closeEditChatModal;
 saveChatInfoBtn.onclick = saveChatInfo;
+
+// Contacts Modal
+contactsBtn.onclick = openContactsModal;
+closeContactsModalBtn.onclick = closeContactsModal;
+contactsModalOverlay.onclick = closeContactsModal;
+contactsSearchInput.addEventListener('input', (e) => {
+    filterContacts(e.target.value);
+});
 
 // Initialize button row listeners
 setupButtonRowListeners();

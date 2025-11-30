@@ -59,6 +59,10 @@
                             <span class="icon">⚙️</span>
                             <span>Configuración</span>
                         </button>
+                        <button id="contacts-btn" class="btn-icon-text" title="Ver contactos de WhatsApp">
+                            <span class="icon">👥</span>
+                            <span>Contactos</span>
+                        </button>
                         <button id="delete-session-btn" class="btn-danger-small">Eliminar</button>
                     </div>
                 </div>
@@ -355,6 +359,29 @@
                 <textarea id="chat-description-input" rows="3" placeholder="Añade notas sobre este contacto..."></textarea>
             </div>
             <button id="save-chat-info-btn" class="btn-primary full-width">Guardar cambios</button>
+        </div>
+    </div>
+    
+    <!-- Modal de contactos de WhatsApp -->
+    <div id="contacts-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="contacts-modal" class="contacts-modal hidden">
+        <div class="contacts-modal-content">
+            <div class="modal-header">
+                <h3>Contactos de WhatsApp</h3>
+                <button id="close-contacts-modal-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Selecciona un contacto para iniciar una conversación. Se agregará automáticamente a la etapa "Interés".</p>
+            
+            <div class="contacts-search">
+                <input type="text" id="contacts-search-input" placeholder="Buscar contacto..." class="search-input">
+            </div>
+            
+            <div class="contacts-list-container" id="contacts-list-container">
+                <div class="loading-contacts">
+                    <span class="spinner"></span>
+                    <span>Cargando contactos...</span>
+                </div>
+            </div>
         </div>
     </div>
     

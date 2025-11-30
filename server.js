@@ -474,6 +474,31 @@ async function getStoredSessions() {
     return sessionIds;
 }
 
+// Helper to get contacts from WhatsApp
+function getContactsFromSession(sessionId) {
+    try {
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.contacts) {
+            return [];
+        }
+
+        // Convertir el Map de contactos a un array
+        const contacts = Array.from(sessionData.contacts.values());
+        
+        // Ordenar por nombre
+        contacts.sort((a, b) => {
+            const nameA = (a.name || '').toLowerCase();
+            const nameB = (b.name || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+        
+        return contacts;
+    } catch (error) {
+        console.error('Error getting contacts:', error);
+        return [];
+    }
+}
+
 // Initialize a session
 async function initSession(id, socketToEmit = null) {
     const sessionPath = path.join(SESSIONS_DIR, id);
@@ -486,6 +511,9 @@ async function initSession(id, socketToEmit = null) {
         auth: state,
         printQRInTerminal: false,
     });
+    
+    // Mantener un mapa de contactos localmente
+    const contacts = new Map();
 
     // Store session in memory with saved or default config
     const existingSession = sessions.get(id);
@@ -493,6 +521,7 @@ async function initSession(id, socketToEmit = null) {
 
     sessions.set(id, { 
         sock, 
+        contacts,
         botEnabled: savedConfig.botEnabled || existingSession?.botEnabled || false, 
         apiKey: savedConfig.apiKey || existingSession?.apiKey || '',
         modelProvider: provider,
@@ -502,6 +531,42 @@ async function initSession(id, socketToEmit = null) {
     });
 
     sock.ev.on('creds.update', saveCreds);
+    
+    // Escuchar eventos de contacts para mantener la lista actualizada
+    sock.ev.on('contacts.set', ({ contacts: contactsUpdate }) => {
+        if (contactsUpdate) {
+            const sessionData = sessions.get(id);
+            if (sessionData) {
+                contactsUpdate.forEach(contact => {
+                    if (contact.id && contact.id.endsWith('@s.whatsapp.net')) {
+                        sessionData.contacts.set(contact.id, {
+                            jid: contact.id,
+                            name: contact.name || contact.notify || contact.id.split('@')[0],
+                            notify: contact.notify || '',
+                            verifiedName: contact.verifiedName || ''
+                        });
+                    }
+                });
+            }
+        }
+    });
+    
+    sock.ev.on('contacts.update', (updates) => {
+        const sessionData = sessions.get(id);
+        if (sessionData && Array.isArray(updates)) {
+            updates.forEach(update => {
+                if (update.id && update.id.endsWith('@s.whatsapp.net')) {
+                    const existing = sessionData.contacts.get(update.id) || {};
+                    sessionData.contacts.set(update.id, {
+                        jid: update.id,
+                        name: update.name || existing.name || update.notify || update.id.split('@')[0],
+                        notify: update.notify || existing.notify || '',
+                        verifiedName: update.verifiedName || existing.verifiedName || ''
+                    });
+                }
+            });
+        }
+    });
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -1030,6 +1095,66 @@ io.on('connection', async (socket) => {
         
         await persistConversations(sessionId);
         emitConversationUpdate(sessionId, conversation);
+    }));
+
+    // Obtener lista de contactos de WhatsApp
+    socket.on('get_contacts', asyncSocketHandler(async (data) => {
+        const { sessionId } = data;
+        
+        if (!sessionId) {
+            socket.emit('contacts_list', { sessionId, contacts: [] });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData) {
+            socket.emit('contacts_list', { sessionId, contacts: [] });
+            return;
+        }
+        
+        const contacts = getContactsFromSession(sessionId);
+        socket.emit('contacts_list', { sessionId, contacts });
+    }));
+
+    // Iniciar conversación con un contacto
+    socket.on('start_conversation_with_contact', asyncSocketHandler(async (data) => {
+        const { sessionId, contactJid, contactName } = data;
+        
+        if (!sessionId || !contactJid) {
+            socket.emit('error', { message: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData) {
+            socket.emit('error', { message: 'Sesión no encontrada' });
+            return;
+        }
+        
+        // Crear o recuperar la conversación
+        const conversation = ensureConversationRecord(sessionId, contactJid, contactName || contactJid);
+        
+        // Asignar al primer stage del funnel (interest)
+        conversation.stage = 'interest';
+        
+        // Si no hay mensajes, añadir un mensaje inicial de sistema
+        if (!conversation.messages || conversation.messages.length === 0) {
+            appendMessage(conversation, {
+                id: `sys-${Date.now()}`,
+                direction: 'outgoing',
+                text: '📝 Conversación iniciada desde contactos',
+                timestamp: Date.now()
+            });
+        }
+        
+        await persistConversations(sessionId);
+        emitConversationUpdate(sessionId, conversation);
+        
+        socket.emit('conversation_started', { 
+            sessionId, 
+            chatId: contactJid,
+            conversation: serializeConversation(conversation, { includeMessages: true })
+        });
     }));
 
     socket.on('update_session_config', asyncSocketHandler(async (data) => {

@@ -213,6 +213,30 @@ Los mensajes con botones se envían usando el formato `viewOnceMessage` con `int
 
 ---
 
+## 5. Ver Contactos de WhatsApp e Iniciar Conversaciones 👥
+
+### Características:
+- Ver la lista completa de contactos de WhatsApp de cada sesión
+- Buscar contactos por nombre o número
+- Iniciar conversaciones con cualquier contacto
+- Las conversaciones nuevas se agregan automáticamente a la etapa "Interés" del funnel
+
+### Cómo usar:
+1. Selecciona una sesión activa y conectada
+2. Haz clic en el botón **"👥 Contactos"** (ubicado entre "Configuración" y "Eliminar")
+3. Espera a que se cargue la lista de contactos
+4. (Opcional) Usa la barra de búsqueda para filtrar contactos
+5. Haz clic en cualquier contacto para iniciar una conversación
+6. La conversación aparecerá automáticamente en la columna "Interés" del Kanban
+
+### Notas importantes:
+- Los contactos se sincronizan automáticamente cuando te conectas a WhatsApp
+- Si no ves contactos inmediatamente después de conectarte, espera unos segundos y vuelve a abrir el modal
+- Los contactos incluyen solo números individuales (no grupos ni estados)
+- Cada conversación iniciada desde contactos se marca con un mensaje inicial "📝 Conversación iniciada desde contactos"
+
+---
+
 ## 🚀 Próximas Mejoras Sugeridas
 
 1. Permitir enviar videos y audios
@@ -221,6 +245,7 @@ Los mensajes con botones se envían usando el formato `viewOnceMessage` con `int
 4. Exportar conversaciones a PDF con formato
 5. Añadir tags/etiquetas a las conversaciones
 6. Sistema de plantillas de mensajes rápidos
+7. Filtrar contactos por múltiples criterios (con/sin foto, verificados, etc.)
 
 ---
 
