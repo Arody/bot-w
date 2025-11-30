@@ -337,6 +337,27 @@
         </div>
     </div>
     
+    <!-- Modal para editar nombre y descripción del chat -->
+    <div id="edit-chat-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="edit-chat-modal" class="edit-chat-modal hidden">
+        <div class="edit-chat-content">
+            <div class="modal-header">
+                <h3>Editar información del chat</h3>
+                <button id="close-edit-chat-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="form-field">
+                <label for="chat-custom-name-input">Nombre personalizado</label>
+                <input type="text" id="chat-custom-name-input" placeholder="Ej: Cliente VIP, Proveedor X, etc.">
+                <small class="field-hint">Si está vacío, se mostrará el nombre de WhatsApp</small>
+            </div>
+            <div class="form-field">
+                <label for="chat-description-input">Descripción/Notas</label>
+                <textarea id="chat-description-input" rows="3" placeholder="Añade notas sobre este contacto..."></textarea>
+            </div>
+            <button id="save-chat-info-btn" class="btn-primary full-width">Guardar cambios</button>
+        </div>
+    </div>
+    
     <script src="app.js"></script>
 </body>
 </html>

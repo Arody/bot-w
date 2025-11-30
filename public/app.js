@@ -146,6 +146,17 @@ const confirmSendDocBtn = document.getElementById('confirm-send-doc-btn');
 const sessionButtonsCache = new Map();
 let pendingFileUpload = null;
 
+// Edit Chat Modal Elements
+const editChatModal = document.getElementById('edit-chat-modal');
+const editChatModalOverlay = document.getElementById('edit-chat-modal-overlay');
+const closeEditChatBtn = document.getElementById('close-edit-chat-btn');
+const chatCustomNameInput = document.getElementById('chat-custom-name-input');
+const chatDescriptionInput = document.getElementById('chat-description-input');
+const saveChatInfoBtn = document.getElementById('save-chat-info-btn');
+
+// Current chat being edited
+let editingChatData = null;
+
 modelProviderSelect.dataset.prevProvider = modelProviderSelect.value || 'gemini';
 
 // Helpers
@@ -184,6 +195,8 @@ function normalizeConversation(conv = {}) {
     return {
         chatId: conv.chatId,
         title: conv.title || conv.chatId || 'Chat',
+        customName: conv.customName || '',
+        description: conv.description || '',
         lastMessageText: conv.lastMessageText || lastMessage?.text || '',
         lastMessageAt: typeof conv.lastMessageAt === 'number' ? conv.lastMessageAt : lastMessage?.timestamp || Date.now(),
         messages: normalizedMessages
@@ -415,11 +428,17 @@ function createKanbanCard(conversation, currentStage) {
     const canMoveLeft = stageIndex > 0;
     const canMoveRight = stageIndex < STAGE_ORDER.length - 1;
     
+    // Usar nombre personalizado si existe, sino usar el título de WhatsApp
+    const displayName = conversation.customName || conversation.title;
+    const hasDescription = conversation.description && conversation.description.trim();
+    
     card.innerHTML = `
         <div class="kanban-card-header">
-            <div class="kanban-card-avatar">${getInitials(conversation.title)}</div>
-            <div class="kanban-card-name">${conversation.title}</div>
+            <div class="kanban-card-avatar">${getInitials(displayName)}</div>
+            <div class="kanban-card-name">${displayName}</div>
+            <button class="kanban-card-edit-btn" title="Editar información">✏️</button>
         </div>
+        ${hasDescription ? `<div class="kanban-card-description">${conversation.description}</div>` : ''}
         <div class="kanban-card-preview">${truncateText(conversation.lastMessageText, 60) || 'Sin mensajes'}</div>
         <div class="kanban-card-meta">
             <span>${formatTimestamp(conversation.lastMessageAt)}</span>
@@ -450,6 +469,11 @@ function createKanbanCard(conversation, currentStage) {
     card.querySelector('.btn-move-chat').onclick = (e) => {
         e.stopPropagation();
         openChat(conversation);
+    };
+    
+    card.querySelector('.kanban-card-edit-btn').onclick = (e) => {
+        e.stopPropagation();
+        openEditChatModal(conversation);
     };
     
     // Drag events
@@ -636,8 +660,9 @@ function openChat(conversation) {
     if (kanbanBoard) kanbanBoard.classList.add('hidden');
     activeChatEl.classList.remove('hidden');
     
-    // Actualizar header
-    chatContactName.textContent = conversation.title;
+    // Actualizar header - usar nombre personalizado si existe
+    const displayName = conversation.customName || conversation.title;
+    chatContactName.textContent = displayName;
     const stage = getConversationStage(conversation.chatId);
     chatContactStatus.textContent = `${conversation.messages.length} mensajes · ${funnelTitles[stage]}`;
     
@@ -1414,6 +1439,45 @@ function requestSessionButtons(sessionId) {
     socket.emit('get_session_buttons', { sessionId });
 }
 
+// ==================== EDIT CHAT INFO FUNCTIONS ====================
+
+function openEditChatModal(conversation) {
+    if (!conversation || !currentSessionId) return;
+    
+    editingChatData = conversation;
+    chatCustomNameInput.value = conversation.customName || '';
+    chatDescriptionInput.value = conversation.description || '';
+    
+    editChatModal.classList.remove('hidden');
+    editChatModalOverlay.classList.remove('hidden');
+    chatCustomNameInput.focus();
+}
+
+function closeEditChatModal() {
+    editChatModal.classList.add('hidden');
+    editChatModalOverlay.classList.add('hidden');
+    editingChatData = null;
+    chatCustomNameInput.value = '';
+    chatDescriptionInput.value = '';
+}
+
+function saveChatInfo() {
+    if (!editingChatData || !currentSessionId) return;
+    
+    const customName = chatCustomNameInput.value.trim();
+    const description = chatDescriptionInput.value.trim();
+    
+    socket.emit('update_conversation_info', {
+        sessionId: currentSessionId,
+        chatId: editingChatData.chatId,
+        customName,
+        description
+    });
+    
+    closeEditChatModal();
+    showToast('Información actualizada');
+}
+
 function selectSession(id) {
     currentSessionId = id;
     activeChat = null;
@@ -1832,6 +1896,11 @@ saveNewButtonBtn.onclick = saveNewButton;
 // Send Button Modal
 closeSendButtonModalBtn.onclick = closeSendButtonModal;
 sendButtonModalOverlay.onclick = closeSendButtonModal;
+
+// Edit Chat Modal
+closeEditChatBtn.onclick = closeEditChatModal;
+editChatModalOverlay.onclick = closeEditChatModal;
+saveChatInfoBtn.onclick = saveChatInfo;
 
 // Initialize button row listeners
 setupButtonRowListeners();

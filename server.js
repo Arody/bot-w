@@ -213,6 +213,8 @@ function serializeConversation(conversation, { includeMessages = true } = {}) {
     const payload = {
         chatId: conversation.chatId,
         title: conversation.title || conversation.chatId,
+        customName: conversation.customName || '',
+        description: conversation.description || '',
         lastMessageText: lastMessage?.text || '',
         lastMessageAt: lastMessage?.timestamp || conversation.updatedAt || Date.now(),
         messageCount: conversation.messages?.length || 0,
@@ -997,6 +999,37 @@ io.on('connection', async (socket) => {
         await saveSessionButtons(sessionId, updatedButtons);
         
         io.emit('session_buttons_updated', { sessionId, buttons: updatedButtons });
+    }));
+
+    // Actualizar nombre y descripción personalizada de una conversación
+    socket.on('update_conversation_info', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, customName, description } = data;
+        
+        if (!sessionId || !chatId) {
+            socket.emit('error', { message: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.conversations) {
+            return;
+        }
+        
+        const conversation = sessionData.conversations.get(chatId);
+        if (!conversation) {
+            return;
+        }
+        
+        // Actualizar campos personalizados
+        if (typeof customName === 'string') {
+            conversation.customName = customName.trim();
+        }
+        if (typeof description === 'string') {
+            conversation.description = description.trim();
+        }
+        
+        await persistConversations(sessionId);
+        emitConversationUpdate(sessionId, conversation);
     }));
 
     socket.on('update_session_config', asyncSocketHandler(async (data) => {
