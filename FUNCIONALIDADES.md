@@ -2,12 +2,14 @@
 
 ## 📋 Resumen
 
-Se han implementado tres funcionalidades principales:
+Se han implementado seis funcionalidades principales:
 
 1. **Envío de Imágenes** 📷
 2. **Envío de Documentos** 📄
 3. **Mensajes con Botones Interactivos** 🔘
 4. **Edición de Información de Chats** ✏️
+5. **Plantillas de Mensajes con Formato y Archivos** 📝
+6. **Ver Contactos e Iniciar Conversaciones** 👥
 
 ---
 
@@ -208,12 +210,86 @@ Los mensajes con botones se envían usando el formato `viewOnceMessage` con `int
 
 ### Archivos de Datos
 - `sessions/{sessionId}/buttons.json` - Configuración de botones por sesión
+- `sessions/{sessionId}/templates.json` - Plantillas de mensajes por sesión
 - `sessions/{sessionId}/conversations.json` - Incluye nombre y descripción personalizados
 - `uploads/` - Carpeta temporal para archivos subidos (se limpian automáticamente)
 
 ---
 
-## 5. Ver Contactos de WhatsApp e Iniciar Conversaciones 👥
+## 5. Plantillas de Mensajes con Formato y Archivos 📝
+
+### Características:
+- Crear plantillas de mensajes reutilizables con formato de WhatsApp
+- Adjuntar imágenes y documentos a las plantillas
+- Formato soportado: *negrita* _cursiva_ ~tachado~ ```monospace```
+- Enlaces automáticos detectados (http://, https://)
+- Las plantillas se guardan por sesión y están disponibles en todos los chats
+- Envío rápido desde cualquier chat activo
+
+### Formato de WhatsApp soportado:
+- **Negrita**: `*texto*` → *texto*
+- **Cursiva**: `_texto_` → _texto_
+- **Tachado**: `~texto~` → ~texto~
+- **Monospace**: `` ```texto``` `` → ```texto```
+- **Enlaces**: Se detectan automáticamente (http://ejemplo.com)
+
+### Cómo crear una plantilla:
+1. Selecciona una sesión
+2. Haz clic en **"📝 Mensajes"** (entre "Contactos" y "Configuración")
+3. Completa el formulario:
+   - **Nombre**: Identificador de la plantilla (ej: "Bienvenida", "Seguimiento")
+   - **Mensaje**: El texto con formato WhatsApp (usa **Enter** para crear saltos de línea)
+   - **Archivos adjuntos** (opcional):
+     - Haz clic en "📷 Adjuntar imagen" para añadir una imagen con descripción
+     - Haz clic en "📄 Adjuntar documento" para añadir un archivo con descripción
+4. Haz clic en "Guardar plantilla"
+
+**Importante**: Los saltos de línea que agregues en la plantilla se mantendrán cuando la uses en un chat.
+
+### Cómo usar una plantilla en un chat:
+1. Abre una conversación (el bot debe estar **desactivado**)
+2. Haz clic en el botón **📋** junto al campo de mensaje
+3. Selecciona la plantilla que deseas usar
+4. El texto de la plantilla se cargará en el campo de mensaje (respetando saltos de línea)
+5. Edita el mensaje si lo deseas (usa **Shift + Enter** para añadir saltos de línea)
+6. Haz clic en "Enviar" o presiona **Enter** para enviar el mensaje
+7. **Nota**: Si la plantilla tiene archivos adjuntos (imagen/documento), deberás enviarlos por separado usando los botones 📷 o 📄
+
+### Ejemplo de plantilla:
+
+```
+Nombre: Bienvenida Cliente
+
+Mensaje:
+*¡Hola!* 👋
+
+Gracias por contactarnos. Te comparto nuestra _información de contacto_:
+
+📞 Teléfono: +52 123 456 7890
+🌐 Web: http://ejemplo.com
+📧 Email: info@ejemplo.com
+
+~Horario de atención~:
+```Lunes a Viernes: 9:00 - 18:00```
+
+¿En qué podemos ayudarte?
+
+Archivos adjuntos:
+- 📷 Logo de la empresa (logo.png)
+- 📄 Catálogo de productos (catalogo.pdf)
+```
+
+### Ventajas:
+- **Ahorro de tiempo**: No escribas el mismo mensaje repetidamente
+- **Consistencia**: Todos los mensajes siguen el mismo formato profesional
+- **Editable**: Carga la plantilla y personalízala antes de enviar
+- **Profesionalismo**: Mensajes bien formateados con formato WhatsApp
+- **Flexibilidad**: Combina texto, imágenes y documentos en una sola plantilla
+- **Reutilizable**: Usa la misma plantilla en múltiples conversaciones
+
+---
+
+## 6. Ver Contactos de WhatsApp e Iniciar Conversaciones 👥
 
 ### Características:
 - Ver la lista completa de contactos de WhatsApp de cada sesión
@@ -239,13 +315,16 @@ Los mensajes con botones se envían usando el formato `viewOnceMessage` con `int
 
 ## 🚀 Próximas Mejoras Sugeridas
 
-1. Permitir enviar videos y audios
+1. Permitir enviar videos y audios en plantillas
 2. Añadir botones de tipo "lista" (list message)
 3. Programar mensajes para envío automático
 4. Exportar conversaciones a PDF con formato
 5. Añadir tags/etiquetas a las conversaciones
-6. Sistema de plantillas de mensajes rápidos
-7. Filtrar contactos por múltiples criterios (con/sin foto, verificados, etc.)
+6. Filtrar contactos por múltiples criterios (con/sin foto, verificados, etc.)
+7. Variables dinámicas en plantillas ({{nombre}}, {{fecha}}, etc.)
+8. Editar plantillas existentes
+9. Duplicar plantillas para crear variaciones
+10. Estadísticas de uso de plantillas
 
 ---
 

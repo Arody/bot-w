@@ -86,6 +86,7 @@ const MAX_MESSAGES_PER_CONVERSATION = parseInt(process.env.MAX_MESSAGES_PER_CONV
 const CONVERSATIONS_FILE = 'conversations.json';
 const SESSION_CONFIG_FILE = 'config.json';
 const BUTTONS_FILE = 'buttons.json';
+const TEMPLATES_FILE = 'templates.json';
 const AI_COOLDOWN_MS = parseInt(process.env.AI_COOLDOWN_MS) || 1000; // 1 segundo entre respuestas AI
 
 function normalizeProvider(provider) {
@@ -138,6 +139,32 @@ async function saveSessionButtons(sessionId, buttons) {
         await fs.writeJson(buttonsPath, buttons, { spaces: 2 });
     } catch (error) {
         console.error(`Error saving buttons for ${sessionId}:`, error);
+    }
+}
+
+function getTemplatesFilePath(sessionId) {
+    return path.join(SESSIONS_DIR, sessionId, TEMPLATES_FILE);
+}
+
+async function loadSessionTemplates(sessionId) {
+    try {
+        const templatesPath = getTemplatesFilePath(sessionId);
+        if (await fs.pathExists(templatesPath)) {
+            return await fs.readJson(templatesPath);
+        }
+    } catch (error) {
+        console.error(`Error loading templates for ${sessionId}:`, error);
+    }
+    return [];
+}
+
+async function saveSessionTemplates(sessionId, templates) {
+    try {
+        const templatesPath = getTemplatesFilePath(sessionId);
+        await fs.ensureDir(path.dirname(templatesPath));
+        await fs.writeJson(templatesPath, templates, { spaces: 2 });
+    } catch (error) {
+        console.error(`Error saving templates for ${sessionId}:`, error);
     }
 }
 
@@ -1155,6 +1182,127 @@ io.on('connection', async (socket) => {
             chatId: contactJid,
             conversation: serializeConversation(conversation, { includeMessages: true })
         });
+    }));
+
+    // Obtener plantillas de mensajes para una sesión
+    socket.on('get_session_templates', asyncSocketHandler(async (data) => {
+        const { sessionId } = data;
+        
+        if (!sessionId) {
+            socket.emit('session_templates', { sessionId, templates: [] });
+            return;
+        }
+        
+        const templates = await loadSessionTemplates(sessionId);
+        socket.emit('session_templates', { sessionId, templates });
+    }));
+
+    // Guardar/actualizar plantillas para una sesión
+    socket.on('save_session_templates', asyncSocketHandler(async (data) => {
+        const { sessionId, templates } = data;
+        
+        if (!sessionId) {
+            socket.emit('error', { message: 'ID de sesión requerido' });
+            return;
+        }
+        
+        await saveSessionTemplates(sessionId, templates || []);
+        io.emit('session_templates_updated', { sessionId, templates: templates || [] });
+    }));
+
+    // Eliminar una plantilla específica
+    socket.on('delete_session_template', asyncSocketHandler(async (data) => {
+        const { sessionId, templateId } = data;
+        
+        if (!sessionId || !templateId) {
+            socket.emit('error', { message: 'Datos incompletos' });
+            return;
+        }
+        
+        const templates = await loadSessionTemplates(sessionId);
+        const updatedTemplates = templates.filter(t => t.id !== templateId);
+        await saveSessionTemplates(sessionId, updatedTemplates);
+        
+        io.emit('session_templates_updated', { sessionId, templates: updatedTemplates });
+    }));
+
+    // Enviar plantilla de mensaje (con texto formateado y archivos)
+    socket.on('send_template_message', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, template } = data;
+        
+        if (!sessionId || !chatId || !template) {
+            socket.emit('template_message_sent', { sessionId, chatId, success: false, error: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.sock) {
+            socket.emit('template_message_sent', { sessionId, chatId, success: false, error: 'Sesión no encontrada' });
+            return;
+        }
+        
+        try {
+            const conversation = ensureConversationRecord(sessionId, chatId, chatId);
+            
+            // Enviar mensaje de texto formateado si existe
+            if (template.text && template.text.trim()) {
+                await sessionData.sock.sendMessage(chatId, { text: template.text });
+                
+                appendMessage(conversation, {
+                    id: `tpl-txt-${Date.now()}`,
+                    direction: 'outgoing',
+                    text: `📋 Plantilla: ${template.name}\n${template.text}`,
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Enviar imagen si existe
+            if (template.imageData) {
+                const imageBuffer = Buffer.from(template.imageData, 'base64');
+                const mimeType = template.imageMimeType || 'image/jpeg';
+                
+                await sessionData.sock.sendMessage(chatId, {
+                    image: imageBuffer,
+                    caption: template.imageCaption || '',
+                    mimetype: mimeType
+                });
+                
+                appendMessage(conversation, {
+                    id: `tpl-img-${Date.now()}`,
+                    direction: 'outgoing',
+                    text: `📷 Imagen de plantilla: ${template.name}`,
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Enviar documento si existe
+            if (template.fileData) {
+                const fileBuffer = Buffer.from(template.fileData, 'base64');
+                const mimeType = template.fileMimeType || 'application/octet-stream';
+                
+                await sessionData.sock.sendMessage(chatId, {
+                    document: fileBuffer,
+                    mimetype: mimeType,
+                    fileName: template.fileName || 'documento',
+                    caption: template.fileCaption || ''
+                });
+                
+                appendMessage(conversation, {
+                    id: `tpl-doc-${Date.now()}`,
+                    direction: 'outgoing',
+                    text: `📄 Documento de plantilla: ${template.fileName || 'documento'}`,
+                    timestamp: Date.now()
+                });
+            }
+            
+            await persistConversations(sessionId);
+            emitConversationUpdate(sessionId, conversation);
+            
+            socket.emit('template_message_sent', { sessionId, chatId, success: true });
+        } catch (error) {
+            console.error('Error sending template message:', error);
+            socket.emit('template_message_sent', { sessionId, chatId, success: false, error: error.message });
+        }
     }));
 
     socket.on('update_session_config', asyncSocketHandler(async (data) => {

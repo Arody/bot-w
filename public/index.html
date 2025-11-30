@@ -55,13 +55,17 @@
                             <span class="icon">🔘</span>
                             <span>Botones</span>
                         </button>
-                        <button id="toggle-config-btn" class="btn-icon-text" title="Configuración del bot">
-                            <span class="icon">⚙️</span>
-                            <span>Configuración</span>
-                        </button>
                         <button id="contacts-btn" class="btn-icon-text" title="Ver contactos de WhatsApp">
                             <span class="icon">👥</span>
                             <span>Contactos</span>
+                        </button>
+                        <button id="manage-templates-btn" class="btn-icon-text" title="Plantillas de mensajes">
+                            <span class="icon">📝</span>
+                            <span>Mensajes</span>
+                        </button>
+                        <button id="toggle-config-btn" class="btn-icon-text" title="Configuración del bot">
+                            <span class="icon">⚙️</span>
+                            <span>Configuración</span>
                         </button>
                         <button id="delete-session-btn" class="btn-danger-small">Eliminar</button>
                     </div>
@@ -180,8 +184,9 @@
                                     <button id="attach-image-btn" class="btn-attach" title="Enviar imagen">📷</button>
                                     <button id="attach-doc-btn" class="btn-attach" title="Enviar documento">📄</button>
                                     <button id="send-buttons-btn" class="btn-attach" title="Enviar botones">🔘</button>
+                                    <button id="send-template-btn" class="btn-attach" title="Cargar plantilla">📋</button>
                                 </div>
-                                <input type="text" id="chat-input" placeholder="Escribe un mensaje..." class="chat-input">
+                                <textarea id="chat-input" placeholder="Escribe un mensaje..." class="chat-input" rows="1"></textarea>
                                 <button id="send-message-btn" class="btn-send">Enviar</button>
                             </div>
                             <input type="file" id="image-upload" accept="image/*" style="display: none;">
@@ -381,6 +386,92 @@
                     <span class="spinner"></span>
                     <span>Cargando contactos...</span>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de gestión de plantillas de mensajes -->
+    <div id="templates-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="templates-modal" class="templates-modal hidden">
+        <div class="templates-modal-content">
+            <div class="modal-header">
+                <h3>Plantillas de Mensajes</h3>
+                <button id="close-templates-modal-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Crea plantillas de mensajes con formato, imágenes y archivos que puedes usar rápidamente en tus chats.</p>
+            
+            <!-- Lista de plantillas existentes -->
+            <div class="templates-list" id="templates-list">
+                <p class="empty-templates">No hay plantillas configuradas</p>
+            </div>
+            
+            <!-- Formulario para crear nueva plantilla -->
+            <div class="new-template-form">
+                <h4>Crear nueva plantilla</h4>
+                
+                <div class="form-field">
+                    <label for="tpl-name-input">Nombre de la plantilla</label>
+                    <input type="text" id="tpl-name-input" placeholder="Ej: Bienvenida, Seguimiento, etc.">
+                </div>
+                
+                <div class="form-field">
+                    <label for="tpl-text-input">Mensaje (con formato WhatsApp)</label>
+                    <textarea id="tpl-text-input" rows="4" placeholder="*Negrita* _Cursiva_ ~Tachado~&#10;Enlaces: http://ejemplo.com"></textarea>
+                    <small class="field-hint">
+                        Formato: *negrita* _cursiva_ ~tachado~ ```monospace```
+                    </small>
+                </div>
+                
+                <div class="template-attachments">
+                    <h5>Archivos adjuntos (opcional)</h5>
+                    
+                    <div class="attachment-section">
+                        <button type="button" id="tpl-attach-image-btn" class="btn-outline">📷 Adjuntar imagen</button>
+                        <input type="file" id="tpl-image-upload" accept="image/*" style="display: none;">
+                        <div id="tpl-image-preview" class="attachment-preview hidden">
+                            <div class="attachment-preview-header">
+                                <span class="attachment-name">imagen.jpg</span>
+                                <button type="button" class="btn-icon" id="tpl-remove-image-btn">×</button>
+                            </div>
+                            <img id="tpl-image-preview-img" src="" alt="Preview">
+                            <input type="text" id="tpl-image-caption-input" placeholder="Descripción de la imagen (opcional)" class="attachment-caption-input">
+                        </div>
+                    </div>
+                    
+                    <div class="attachment-section">
+                        <button type="button" id="tpl-attach-file-btn" class="btn-outline">📄 Adjuntar documento</button>
+                        <input type="file" id="tpl-file-upload" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" style="display: none;">
+                        <div id="tpl-file-preview" class="attachment-preview hidden">
+                            <div class="attachment-preview-header">
+                                <span class="attachment-name" id="tpl-file-name">documento.pdf</span>
+                                <button type="button" class="btn-icon" id="tpl-remove-file-btn">×</button>
+                            </div>
+                            <div class="file-info">
+                                <span class="file-icon">📄</span>
+                                <span class="file-size" id="tpl-file-size">0 KB</span>
+                            </div>
+                            <input type="text" id="tpl-file-caption-input" placeholder="Descripción del documento (opcional)" class="attachment-caption-input">
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="save-new-template-btn" class="btn-primary full-width">Guardar plantilla</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para seleccionar plantilla a enviar -->
+    <div id="send-template-modal-overlay" class="modal-overlay hidden"></div>
+    <div id="send-template-modal" class="send-template-modal hidden">
+        <div class="send-template-modal-content">
+            <div class="modal-header">
+                <h3>Usar plantilla</h3>
+                <button id="close-send-template-modal-btn" class="btn-icon" aria-label="Cerrar">&times;</button>
+            </div>
+            <p class="helper-text">Selecciona una plantilla para cargar su texto en el campo de mensaje. Podrás editarlo antes de enviar.</p>
+            
+            <div class="available-templates-list" id="available-templates-list">
+                <p class="empty-templates">No hay plantillas configuradas.</p>
             </div>
         </div>
     </div>

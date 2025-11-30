@@ -168,6 +168,43 @@ let editingChatData = null;
 // Contacts cache
 let currentContacts = [];
 
+// Templates Modal Elements
+const manageTemplatesBtn = document.getElementById('manage-templates-btn');
+const templatesModal = document.getElementById('templates-modal');
+const templatesModalOverlay = document.getElementById('templates-modal-overlay');
+const closeTemplatesModalBtn = document.getElementById('close-templates-modal-btn');
+const templatesList = document.getElementById('templates-list');
+const tplNameInput = document.getElementById('tpl-name-input');
+const tplTextInput = document.getElementById('tpl-text-input');
+const tplAttachImageBtn = document.getElementById('tpl-attach-image-btn');
+const tplImageUpload = document.getElementById('tpl-image-upload');
+const tplImagePreview = document.getElementById('tpl-image-preview');
+const tplImagePreviewImg = document.getElementById('tpl-image-preview-img');
+const tplImageCaptionInput = document.getElementById('tpl-image-caption-input');
+const tplRemoveImageBtn = document.getElementById('tpl-remove-image-btn');
+const tplAttachFileBtn = document.getElementById('tpl-attach-file-btn');
+const tplFileUpload = document.getElementById('tpl-file-upload');
+const tplFilePreview = document.getElementById('tpl-file-preview');
+const tplFileName = document.getElementById('tpl-file-name');
+const tplFileSize = document.getElementById('tpl-file-size');
+const tplFileCaptionInput = document.getElementById('tpl-file-caption-input');
+const tplRemoveFileBtn = document.getElementById('tpl-remove-file-btn');
+const saveNewTemplateBtn = document.getElementById('save-new-template-btn');
+
+// Send Template Modal Elements
+const sendTemplateBtn = document.getElementById('send-template-btn');
+const sendTemplateModal = document.getElementById('send-template-modal');
+const sendTemplateModalOverlay = document.getElementById('send-template-modal-overlay');
+const closeSendTemplateModalBtn = document.getElementById('close-send-template-modal-btn');
+const availableTemplatesList = document.getElementById('available-templates-list');
+
+// Templates cache
+const sessionTemplatesCache = new Map();
+
+// Current template being created
+let currentTemplateImage = null;
+let currentTemplateFile = null;
+
 modelProviderSelect.dataset.prevProvider = modelProviderSelect.value || 'gemini';
 
 // Helpers
@@ -722,6 +759,7 @@ function sendManualMessage() {
     });
     
     chatInput.value = '';
+    chatInput.style.height = 'auto';
 }
 
 function showTypingIndicator(chatId) {
@@ -1589,6 +1627,262 @@ function startConversationWithContact(contact) {
     closeContactsModal();
 }
 
+// ==================== TEMPLATES FUNCTIONS ====================
+
+function openTemplatesModal() {
+    if (!currentSessionId) {
+        showAlertDialog('Selecciona una sesión primero');
+        return;
+    }
+    
+    templatesModal.classList.remove('hidden');
+    templatesModalOverlay.classList.remove('hidden');
+    renderTemplatesList();
+    resetTemplateForm();
+}
+
+function closeTemplatesModal() {
+    templatesModal.classList.add('hidden');
+    templatesModalOverlay.classList.add('hidden');
+}
+
+function openSendTemplateModal() {
+    if (!currentSessionId) return;
+    
+    const templates = sessionTemplatesCache.get(currentSessionId) || [];
+    
+    if (templates.length === 0) {
+        showAlertDialog('No hay plantillas configuradas. Configúralas primero desde el botón "Mensajes" en la barra superior.');
+        return;
+    }
+    
+    renderAvailableTemplates(templates);
+    sendTemplateModal.classList.remove('hidden');
+    sendTemplateModalOverlay.classList.remove('hidden');
+}
+
+function closeSendTemplateModal() {
+    sendTemplateModal.classList.add('hidden');
+    sendTemplateModalOverlay.classList.add('hidden');
+}
+
+function renderTemplatesList() {
+    if (!currentSessionId) {
+        templatesList.innerHTML = '<p class="empty-templates">Selecciona una sesión primero</p>';
+        return;
+    }
+    
+    const templates = sessionTemplatesCache.get(currentSessionId) || [];
+    
+    if (templates.length === 0) {
+        templatesList.innerHTML = '<p class="empty-templates">No hay plantillas configuradas</p>';
+        return;
+    }
+    
+    templatesList.innerHTML = templates.map(tpl => {
+        const attachments = [];
+        if (tpl.imageData) attachments.push('<span class="template-attachment-badge">📷 Imagen</span>');
+        if (tpl.fileData) attachments.push('<span class="template-attachment-badge">📄 Archivo</span>');
+        
+        return `
+            <div class="template-config-card" data-id="${tpl.id}">
+                <div class="template-config-header">
+                    <span class="template-config-name">${tpl.name}</span>
+                    <div class="template-config-actions">
+                        <button class="btn-icon btn-delete-template" data-id="${tpl.id}" title="Eliminar">🗑️</button>
+                    </div>
+                </div>
+                <div class="template-config-preview">${tpl.text || 'Sin texto'}</div>
+                ${attachments.length > 0 ? `<div class="template-config-attachments">${attachments.join('')}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    // Event listeners para eliminar
+    templatesList.querySelectorAll('.btn-delete-template').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const tplId = btn.dataset.id;
+            showConfirmDialog('¿Eliminar esta plantilla?', () => {
+                socket.emit('delete_session_template', {
+                    sessionId: currentSessionId,
+                    templateId: tplId
+                });
+            });
+        };
+    });
+}
+
+function renderAvailableTemplates(templates) {
+    if (templates.length === 0) {
+        availableTemplatesList.innerHTML = '<p class="empty-templates">No hay plantillas configuradas.</p>';
+        return;
+    }
+    
+    availableTemplatesList.innerHTML = templates.map(tpl => {
+        const attachments = [];
+        if (tpl.imageData) attachments.push('<span class="template-attachment-badge">📷 Imagen</span>');
+        if (tpl.fileData) attachments.push('<span class="template-attachment-badge">📄 Archivo</span>');
+        
+        return `
+            <div class="available-template-item" data-id="${tpl.id}">
+                <div class="available-template-name">${tpl.name}</div>
+                <div class="available-template-preview">${tpl.text || 'Sin texto'}</div>
+                ${attachments.length > 0 ? `<div class="available-template-attachments">${attachments.join('')}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    // Event listeners para enviar
+    availableTemplatesList.querySelectorAll('.available-template-item').forEach(item => {
+        item.onclick = () => {
+            const tplId = item.dataset.id;
+            const template = templates.find(t => t.id === tplId);
+            if (template) {
+                sendTemplateMessage(template);
+            }
+        };
+    });
+}
+
+function resetTemplateForm() {
+    tplNameInput.value = '';
+    tplTextInput.value = '';
+    currentTemplateImage = null;
+    currentTemplateFile = null;
+    tplImagePreview.classList.add('hidden');
+    tplFilePreview.classList.add('hidden');
+    tplImageCaptionInput.value = '';
+    tplFileCaptionInput.value = '';
+}
+
+function handleTemplateImageSelect(file) {
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        currentTemplateImage = {
+            data: e.target.result,
+            name: file.name,
+            type: file.type,
+            size: file.size
+        };
+        
+        tplImagePreviewImg.src = e.target.result;
+        tplImagePreview.querySelector('.attachment-name').textContent = file.name;
+        tplImagePreview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleTemplateFileSelect(file) {
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        currentTemplateFile = {
+            data: e.target.result,
+            name: file.name,
+            type: file.type,
+            size: file.size
+        };
+        
+        tplFileName.textContent = file.name;
+        tplFileSize.textContent = formatFileSize(file.size);
+        tplFilePreview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function saveNewTemplate() {
+    if (!currentSessionId) {
+        showAlertDialog('Selecciona una sesión primero');
+        return;
+    }
+    
+    const name = tplNameInput.value.trim();
+    const text = tplTextInput.value.trim();
+    
+    if (!name) {
+        showAlertDialog('El nombre es requerido');
+        return;
+    }
+    
+    if (!text && !currentTemplateImage && !currentTemplateFile) {
+        showAlertDialog('Añade al menos un mensaje de texto, una imagen o un archivo');
+        return;
+    }
+    
+    const newTemplate = {
+        id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        text: text || ''
+    };
+    
+    // Agregar imagen si existe
+    if (currentTemplateImage) {
+        newTemplate.imageData = currentTemplateImage.data.split(',')[1]; // Remover el prefix data:image/...;base64,
+        newTemplate.imageMimeType = currentTemplateImage.type;
+        newTemplate.imageName = currentTemplateImage.name;
+        newTemplate.imageCaption = tplImageCaptionInput.value.trim();
+    }
+    
+    // Agregar archivo si existe
+    if (currentTemplateFile) {
+        newTemplate.fileData = currentTemplateFile.data.split(',')[1]; // Remover el prefix
+        newTemplate.fileMimeType = currentTemplateFile.type;
+        newTemplate.fileName = currentTemplateFile.name;
+        newTemplate.fileCaption = tplFileCaptionInput.value.trim();
+    }
+    
+    const existingTemplates = sessionTemplatesCache.get(currentSessionId) || [];
+    existingTemplates.push(newTemplate);
+    
+    socket.emit('save_session_templates', {
+        sessionId: currentSessionId,
+        templates: existingTemplates
+    });
+    
+    resetTemplateForm();
+    showToast('Plantilla guardada');
+}
+
+function sendTemplateMessage(template) {
+    if (!activeChat || !currentSessionId) {
+        showAlertDialog('No hay chat activo');
+        return;
+    }
+    
+    // Cargar el texto de la plantilla en el campo de input
+    if (template.text && template.text.trim()) {
+        chatInput.value = template.text;
+        
+        // Auto-ajustar la altura del textarea
+        autoResizeTextarea();
+        
+        chatInput.focus();
+    }
+    
+    closeSendTemplateModal();
+    
+    // Mostrar notificación si la plantilla tiene archivos adjuntos
+    const hasAttachments = template.imageData || template.fileData;
+    if (hasAttachments) {
+        const attachmentTypes = [];
+        if (template.imageData) attachmentTypes.push('imagen');
+        if (template.fileData) attachmentTypes.push('documento');
+        
+        showToast(`Texto cargado. Esta plantilla incluye: ${attachmentTypes.join(' y ')}. Envíalos por separado si lo necesitas.`, 4000);
+    } else {
+        showToast('Plantilla cargada en el campo de texto');
+    }
+}
+
+function requestSessionTemplates(sessionId) {
+    if (!sessionId) return;
+    socket.emit('get_session_templates', { sessionId });
+}
+
 function selectSession(id) {
     currentSessionId = id;
     activeChat = null;
@@ -1613,6 +1907,7 @@ function selectSession(id) {
     }
     requestConversations(id);
     requestSessionButtons(id);
+    requestSessionTemplates(id);
 }
 
 function handleAddSession() {
@@ -1918,6 +2213,35 @@ socket.on('conversation_started', (payload) => {
     }
 });
 
+socket.on('session_templates', (payload) => {
+    const { sessionId, templates } = payload || {};
+    if (sessionId) {
+        sessionTemplatesCache.set(sessionId, templates || []);
+        if (sessionId === currentSessionId) {
+            renderTemplatesList();
+        }
+    }
+});
+
+socket.on('session_templates_updated', (payload) => {
+    const { sessionId, templates } = payload || {};
+    if (sessionId) {
+        sessionTemplatesCache.set(sessionId, templates || []);
+        if (sessionId === currentSessionId) {
+            renderTemplatesList();
+        }
+    }
+});
+
+socket.on('template_message_sent', (payload) => {
+    const { sessionId, chatId, success, error } = payload || {};
+    if (success) {
+        showToast('Plantilla enviada');
+    } else {
+        showAlertDialog(`Error al enviar plantilla: ${error || 'Error desconocido'}`);
+    }
+});
+
 socket.on('error', (data) => {
     showAlertDialog(data.message || 'Ha ocurrido un error');
 });
@@ -1939,6 +2263,15 @@ exportChatBtn.onclick = () => {
     if (activeChat) exportConversation(activeChat);
 };
 sendMessageBtn.onclick = sendManualMessage;
+
+// Auto-resize textarea cuando el usuario escribe
+function autoResizeTextarea() {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+}
+
+chatInput.addEventListener('input', autoResizeTextarea);
+
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -2045,6 +2378,46 @@ contactsModalOverlay.onclick = closeContactsModal;
 contactsSearchInput.addEventListener('input', (e) => {
     filterContacts(e.target.value);
 });
+
+// Templates Modal
+manageTemplatesBtn.onclick = openTemplatesModal;
+closeTemplatesModalBtn.onclick = closeTemplatesModal;
+templatesModalOverlay.onclick = closeTemplatesModal;
+saveNewTemplateBtn.onclick = saveNewTemplate;
+
+// Template attachments
+tplAttachImageBtn.onclick = () => tplImageUpload.click();
+tplImageUpload.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        handleTemplateImageSelect(file);
+        tplImageUpload.value = '';
+    }
+};
+tplRemoveImageBtn.onclick = () => {
+    currentTemplateImage = null;
+    tplImagePreview.classList.add('hidden');
+    tplImageCaptionInput.value = '';
+};
+
+tplAttachFileBtn.onclick = () => tplFileUpload.click();
+tplFileUpload.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        handleTemplateFileSelect(file);
+        tplFileUpload.value = '';
+    }
+};
+tplRemoveFileBtn.onclick = () => {
+    currentTemplateFile = null;
+    tplFilePreview.classList.add('hidden');
+    tplFileCaptionInput.value = '';
+};
+
+// Send Template Modal
+sendTemplateBtn.onclick = openSendTemplateModal;
+closeSendTemplateModalBtn.onclick = closeSendTemplateModal;
+sendTemplateModalOverlay.onclick = closeSendTemplateModal;
 
 // Initialize button row listeners
 setupButtonRowListeners();
