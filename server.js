@@ -149,9 +149,13 @@ function getTemplatesFilePath(sessionId) {
 async function loadSessionTemplates(sessionId) {
     try {
         const templatesPath = getTemplatesFilePath(sessionId);
+        console.log(`Loading templates from: ${templatesPath}`);
         if (await fs.pathExists(templatesPath)) {
-            return await fs.readJson(templatesPath);
+            const templates = await fs.readJson(templatesPath);
+            console.log(`Loaded ${templates.length} templates for ${sessionId}`);
+            return templates;
         }
+        console.log(`No templates file found for ${sessionId}`);
     } catch (error) {
         console.error(`Error loading templates for ${sessionId}:`, error);
     }
@@ -163,8 +167,10 @@ async function saveSessionTemplates(sessionId, templates) {
         const templatesPath = getTemplatesFilePath(sessionId);
         await fs.ensureDir(path.dirname(templatesPath));
         await fs.writeJson(templatesPath, templates, { spaces: 2 });
+        console.log(`Saved ${templates.length} templates for ${sessionId} to ${templatesPath}`);
     } catch (error) {
         console.error(`Error saving templates for ${sessionId}:`, error);
+        throw error; // Re-throw para que el handler pueda manejarlo
     }
 }
 
@@ -1206,8 +1212,14 @@ io.on('connection', async (socket) => {
             return;
         }
         
-        await saveSessionTemplates(sessionId, templates || []);
-        io.emit('session_templates_updated', { sessionId, templates: templates || [] });
+        try {
+            await saveSessionTemplates(sessionId, templates || []);
+            io.emit('session_templates_updated', { sessionId, templates: templates || [] });
+            socket.emit('templates_saved', { sessionId, success: true });
+        } catch (error) {
+            console.error('Error saving templates:', error);
+            socket.emit('error', { message: 'Error al guardar plantillas' });
+        }
     }));
 
     // Eliminar una plantilla específica
@@ -1226,7 +1238,7 @@ io.on('connection', async (socket) => {
         io.emit('session_templates_updated', { sessionId, templates: updatedTemplates });
     }));
 
-    // Enviar plantilla de mensaje (con texto formateado y archivos)
+    // Enviar plantilla de mensaje completa (con texto formateado y archivos)
     socket.on('send_template_message', asyncSocketHandler(async (data) => {
         const { sessionId, chatId, template } = data;
         
@@ -1302,6 +1314,78 @@ io.on('connection', async (socket) => {
         } catch (error) {
             console.error('Error sending template message:', error);
             socket.emit('template_message_sent', { sessionId, chatId, success: false, error: error.message });
+        }
+    }));
+
+    // Enviar solo los archivos adjuntos de una plantilla (texto se envía manualmente)
+    socket.on('send_template_attachments', asyncSocketHandler(async (data) => {
+        const { sessionId, chatId, template } = data;
+        
+        if (!sessionId || !chatId || !template) {
+            socket.emit('template_attachments_sent', { sessionId, chatId, success: false, error: 'Datos incompletos' });
+            return;
+        }
+        
+        const sessionData = sessions.get(sessionId);
+        if (!sessionData || !sessionData.sock) {
+            socket.emit('template_attachments_sent', { sessionId, chatId, success: false, error: 'Sesión no encontrada' });
+            return;
+        }
+        
+        try {
+            const conversation = ensureConversationRecord(sessionId, chatId, chatId);
+            let sent = false;
+            
+            // Enviar imagen si existe
+            if (template.imageData) {
+                const imageBuffer = Buffer.from(template.imageData, 'base64');
+                const mimeType = template.imageMimeType || 'image/jpeg';
+                
+                await sessionData.sock.sendMessage(chatId, {
+                    image: imageBuffer,
+                    caption: template.imageCaption || '',
+                    mimetype: mimeType
+                });
+                
+                appendMessage(conversation, {
+                    id: `tpl-img-${Date.now()}`,
+                    direction: 'outgoing',
+                    text: template.imageCaption ? `📷 Imagen: ${template.imageCaption}` : '📷 Imagen enviada',
+                    timestamp: Date.now()
+                });
+                sent = true;
+            }
+            
+            // Enviar documento si existe
+            if (template.fileData) {
+                const fileBuffer = Buffer.from(template.fileData, 'base64');
+                const mimeType = template.fileMimeType || 'application/octet-stream';
+                
+                await sessionData.sock.sendMessage(chatId, {
+                    document: fileBuffer,
+                    mimetype: mimeType,
+                    fileName: template.fileName || 'documento',
+                    caption: template.fileCaption || ''
+                });
+                
+                appendMessage(conversation, {
+                    id: `tpl-doc-${Date.now()}`,
+                    direction: 'outgoing',
+                    text: `📄 Documento: ${template.fileName || 'documento'}`,
+                    timestamp: Date.now()
+                });
+                sent = true;
+            }
+            
+            if (sent) {
+                await persistConversations(sessionId);
+                emitConversationUpdate(sessionId, conversation);
+            }
+            
+            socket.emit('template_attachments_sent', { sessionId, chatId, success: true });
+        } catch (error) {
+            console.error('Error sending template attachments:', error);
+            socket.emit('template_attachments_sent', { sessionId, chatId, success: false, error: error.message });
         }
     }));
 

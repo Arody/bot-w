@@ -1821,22 +1821,34 @@ function saveNewTemplate() {
     
     // Agregar imagen si existe
     if (currentTemplateImage) {
-        newTemplate.imageData = currentTemplateImage.data.split(',')[1]; // Remover el prefix data:image/...;base64,
+        // Verificar si ya tiene el prefijo data:
+        const imageData = currentTemplateImage.data;
+        newTemplate.imageData = imageData.includes(',') ? imageData.split(',')[1] : imageData;
         newTemplate.imageMimeType = currentTemplateImage.type;
         newTemplate.imageName = currentTemplateImage.name;
         newTemplate.imageCaption = tplImageCaptionInput.value.trim();
+        console.log('Adding image to template:', newTemplate.imageName, 'size:', newTemplate.imageData?.length || 0);
     }
     
     // Agregar archivo si existe
     if (currentTemplateFile) {
-        newTemplate.fileData = currentTemplateFile.data.split(',')[1]; // Remover el prefix
+        // Verificar si ya tiene el prefijo data:
+        const fileData = currentTemplateFile.data;
+        newTemplate.fileData = fileData.includes(',') ? fileData.split(',')[1] : fileData;
         newTemplate.fileMimeType = currentTemplateFile.type;
         newTemplate.fileName = currentTemplateFile.name;
         newTemplate.fileCaption = tplFileCaptionInput.value.trim();
+        console.log('Adding file to template:', newTemplate.fileName, 'size:', newTemplate.fileData?.length || 0);
     }
     
-    const existingTemplates = sessionTemplatesCache.get(currentSessionId) || [];
+    // Obtener plantillas existentes y agregar la nueva
+    const existingTemplates = [...(sessionTemplatesCache.get(currentSessionId) || [])];
     existingTemplates.push(newTemplate);
+    
+    // Actualizar caché local inmediatamente
+    sessionTemplatesCache.set(currentSessionId, existingTemplates);
+    
+    console.log('Saving templates for session:', currentSessionId, 'total:', existingTemplates.length);
     
     socket.emit('save_session_templates', {
         sessionId: currentSessionId,
@@ -1844,7 +1856,8 @@ function saveNewTemplate() {
     });
     
     resetTemplateForm();
-    showToast('Plantilla guardada');
+    renderTemplatesList();
+    showToast('Guardando plantilla...');
 }
 
 function sendTemplateMessage(template) {
@@ -1865,14 +1878,30 @@ function sendTemplateMessage(template) {
     
     closeSendTemplateModal();
     
-    // Mostrar notificación si la plantilla tiene archivos adjuntos
+    // Enviar archivos adjuntos automáticamente si existen
     const hasAttachments = template.imageData || template.fileData;
     if (hasAttachments) {
+        // Enviar los archivos adjuntos al servidor
+        socket.emit('send_template_attachments', {
+            sessionId: currentSessionId,
+            chatId: activeChat.chatId,
+            template: {
+                imageData: template.imageData,
+                imageMimeType: template.imageMimeType,
+                imageName: template.imageName,
+                imageCaption: template.imageCaption,
+                fileData: template.fileData,
+                fileMimeType: template.fileMimeType,
+                fileName: template.fileName,
+                fileCaption: template.fileCaption
+            }
+        });
+        
         const attachmentTypes = [];
         if (template.imageData) attachmentTypes.push('imagen');
         if (template.fileData) attachmentTypes.push('documento');
         
-        showToast(`Texto cargado. Esta plantilla incluye: ${attachmentTypes.join(' y ')}. Envíalos por separado si lo necesitas.`, 4000);
+        showToast(`Texto cargado. Enviando ${attachmentTypes.join(' y ')}...`);
     } else {
         showToast('Plantilla cargada en el campo de texto');
     }
@@ -2215,6 +2244,7 @@ socket.on('conversation_started', (payload) => {
 
 socket.on('session_templates', (payload) => {
     const { sessionId, templates } = payload || {};
+    console.log('Received templates for session:', sessionId, 'count:', templates?.length || 0);
     if (sessionId) {
         sessionTemplatesCache.set(sessionId, templates || []);
         if (sessionId === currentSessionId) {
@@ -2225,11 +2255,19 @@ socket.on('session_templates', (payload) => {
 
 socket.on('session_templates_updated', (payload) => {
     const { sessionId, templates } = payload || {};
+    console.log('Templates updated:', sessionId, templates?.length || 0, 'templates');
     if (sessionId) {
         sessionTemplatesCache.set(sessionId, templates || []);
         if (sessionId === currentSessionId) {
             renderTemplatesList();
         }
+    }
+});
+
+socket.on('templates_saved', (payload) => {
+    const { sessionId, success } = payload || {};
+    if (success) {
+        console.log('Templates saved successfully for session:', sessionId);
     }
 });
 
@@ -2239,6 +2277,15 @@ socket.on('template_message_sent', (payload) => {
         showToast('Plantilla enviada');
     } else {
         showAlertDialog(`Error al enviar plantilla: ${error || 'Error desconocido'}`);
+    }
+});
+
+socket.on('template_attachments_sent', (payload) => {
+    const { sessionId, chatId, success, error } = payload || {};
+    if (success) {
+        showToast('Archivos adjuntos enviados');
+    } else {
+        showAlertDialog(`Error al enviar archivos: ${error || 'Error desconocido'}`);
     }
 });
 

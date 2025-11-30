@@ -251,9 +251,9 @@ Los mensajes con botones se envían usando el formato `viewOnceMessage` con `int
 2. Haz clic en el botón **📋** junto al campo de mensaje
 3. Selecciona la plantilla que deseas usar
 4. El texto de la plantilla se cargará en el campo de mensaje (respetando saltos de línea)
-5. Edita el mensaje si lo deseas (usa **Shift + Enter** para añadir saltos de línea)
-6. Haz clic en "Enviar" o presiona **Enter** para enviar el mensaje
-7. **Nota**: Si la plantilla tiene archivos adjuntos (imagen/documento), deberás enviarlos por separado usando los botones 📷 o 📄
+5. **Los archivos adjuntos (imagen/documento) se enviarán automáticamente**
+6. Edita el texto si lo deseas (usa **Shift + Enter** para añadir saltos de línea)
+7. Haz clic en "Enviar" o presiona **Enter** para enviar el texto
 
 ### Ejemplo de plantilla:
 
